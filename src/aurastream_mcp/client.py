@@ -9,13 +9,13 @@ from typing import Any
 
 import httpx
 
-from .sources import INTERVALS, SOURCES
+from .sources import SOURCES, intervals_for
 
 API_URL = os.environ.get("AURASTREAM_API_URL", "https://api.aurastream.unbiased-alpha.com/timeseries")
 DASHBOARD_URL = "https://aurastream.unbiased-alpha.com"
 TIMEOUT_SECONDS = 130.0  # the API itself times out at 120 s
 
-_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}( \d{2}:\d{2}(:\d{2})?)?$")
+_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 
 class AuraStreamError(Exception):
@@ -37,7 +37,8 @@ def credentials_from_env(source: str, env: Mapping[str, str] | None = None) -> d
     for cf in spec.credentials:
         value = env.get(cf.env) or cf.default
         if value:
-            creds[cf.field] = value
+            for name in cf.fields:
+                creds[name] = value
         else:
             missing.append(cf.env)
     if missing:
@@ -60,7 +61,8 @@ def build_body(
     instrument: str | None = None,
     assetclass: str | None = None,
     category: str | None = None,
-    continuous_contracts: bool | None = None,
+    feed: str | None = None,
+    frequency: str | None = None,
     env: Mapping[str, str] | None = None,
 ) -> dict[str, Any]:
     """Validate the arguments and build the JSON request body."""
@@ -74,9 +76,11 @@ def build_body(
         raise AuraStreamError("Pass at least one ticker.")
     for label, value in (("start", start), ("end", end)):
         if not _DATE_RE.match(value.strip()):
-            raise AuraStreamError(f"{label} must be YYYY-MM-DD or 'YYYY-MM-DD HH:MM', got '{value}'.")
-    if interval not in INTERVALS:
-        raise AuraStreamError(f"Unsupported interval '{interval}'. Use one of: {', '.join(INTERVALS)}.")
+            raise AuraStreamError(f"{label} must be YYYY-MM-DD, got '{value}'.")
+    if interval not in intervals_for(source):
+        raise AuraStreamError(
+            f"Source '{source}' does not support interval '{interval}'. Use one of: {', '.join(intervals_for(source))}."
+        )
     if dtype not in spec.dtypes:
         raise AuraStreamError(f"Source '{source}' supports dtype {', '.join(spec.dtypes)}; got '{dtype}'.")
 
@@ -85,13 +89,23 @@ def build_body(
         "instrument": instrument,
         "assetclass": assetclass,
         "category": category,
-        "continuous_contracts": continuous_contracts,
+        "feed": feed,
+        "frequency": frequency,
     }
     for name, value in extras.items():
         if value is not None and name not in spec.params:
             raise AuraStreamError(f"Parameter '{name}' does not apply to source '{source}'.")
-    if price_type is not None and price_type not in ("M", "A", "B"):
-        raise AuraStreamError('price_type must be "M" (mid), "A" (ask) or "B" (bid).')
+    allowed = {
+        "price_type": ("A", "B", "M"),
+        "instrument": {"binance": ("spot", "perpetual"), "kraken": ("spot", "futures")}.get(source, ()),
+        "assetclass": ("equity", "crypto"),
+        "category": ("linear", "inverse"),
+        "feed": ("iex", "sip"),
+        "frequency": ("quarterly", "annual"),
+    }
+    for name, value in extras.items():
+        if value is not None and value not in allowed[name]:
+            raise AuraStreamError(f"{name} for '{source}' must be one of {', '.join(allowed[name])}; got '{value}'.")
 
     body: dict[str, Any] = {
         "tickerlist": tickers,
@@ -129,7 +143,7 @@ def map_error(resp: httpx.Response) -> AuraStreamError:
     if status == 429:
         if "limit exceeded" in detail.lower():
             return AuraStreamError(
-                "AuraStream monthly call allowance is used up. It resets on the 1st of next month; "
+                "AuraStream monthly call allowance is used up. It resets on the 1st of next month (00:00 UTC); "
                 f"to keep going now, upgrade the plan at {DASHBOARD_URL}."
             )
         return AuraStreamError("AuraStream rate limit hit (too many requests in a short time). Wait a few seconds and retry.")

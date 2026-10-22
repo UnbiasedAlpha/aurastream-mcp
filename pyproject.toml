@@ -23,7 +23,7 @@ aurastream-mcp = "aurastream_mcp.server:main"
 
 [project.urls]
 Homepage = "https://aurastream.unbiased-alpha.com"
-Documentation = "https://unbiasedalpha.github.io/aurastream-docs"
+Documentation = "https://aurastream.unbiased-alpha.com/docs/"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/aurastream_mcp"]

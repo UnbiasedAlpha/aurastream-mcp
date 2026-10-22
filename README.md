@@ -1,6 +1,6 @@
 # aurastream-mcp
 
-An [MCP](https://modelcontextprotocol.io) server for [AuraStream](https://aurastream.unbiased-alpha.com), the unified historical market data API. It lets Claude Desktop, Claude Code, ChatGPT and other MCP clients pull OHLCV bars (and, for some sources, trades, quotes and order/position books) from crypto exchanges, Yahoo Finance, Oanda, Alpaca, Polygon, FRED and others, through one tool.
+An [MCP](https://modelcontextprotocol.io) server for [AuraStream](https://aurastream.unbiased-alpha.com), the unified historical market data API. It lets Claude Desktop, Claude Code, ChatGPT and other MCP clients pull OHLCV bars (and, for some sources, funding rates, trades, quotes, order books and earnings) from crypto exchanges, Yahoo Finance, Oanda, Alpaca, Polygon, FRED and others, through one tool.
 
 Ask "plot BTC daily closes for Q1 from Binance" or "compare SPY and QQQ drawdowns this year" and the model calls AuraStream for the data.
 
@@ -8,13 +8,13 @@ Ask "plot BTC daily closes for Q1 from Binance" or "compare SPY and QQQ drawdown
 
 | Tool | What it does |
 |---|---|
-| `list_sources()` | Sources, asset classes, ticker formats, supported dtypes and source-specific parameters, and whether provider credentials are needed and configured. No API call. |
-| `get_timeseries(source, tickers, start, end, interval="1d", dtype="bars", price_type=None, instrument=None, assetclass=None, category=None, continuous_contracts=None, max_rows=100)` | Calls `POST /timeseries`. Returns one CSV block per ticker (`timestamp,Open,High,Low,Close,Volume` for bars), capped at the most recent `max_rows` rows (max 1000) with the total row count noted. |
+| `list_sources()` | Sources, asset classes, ticker formats, intervals, supported dtypes and source-specific parameters, and whether provider credentials are needed and configured. No API call. |
+| `get_timeseries(source, tickers, start, end, interval="1d", dtype="bars", price_type=None, instrument=None, assetclass=None, category=None, feed=None, frequency=None, max_rows=100)` | Calls `POST /timeseries`. Returns one CSV block per ticker (`timestamp,Open,High,Low,Close,Volume` for bars), capped at the most recent `max_rows` rows (max 1000) with the total row count noted. |
 | `get_latest(source, tickers, interval="1d", bars=10)` | The most recent N bars per ticker, without picking dates. |
 
 Each `get_timeseries` / `get_latest` call is one AuraStream API call.
 
-Sources exposed: `binance`, `bybit`, `kraken`, `yahoo` (no provider credentials) and `firstrate`, `oanda`, `alpaca`, `polygon`, `fred`, `finnhub` (your own provider credentials).
+Sources exposed: `binance`, `bybit`, `kraken`, `yahoo`, `firstrate` (no provider credentials) and `oanda`, `alpaca`, `polygon`, `fred`, `finnhub` (your own provider credentials). Dates are `YYYY-MM-DD`; the server checks intervals, dtypes and parameters against each source's documented values before calling the API.
 
 ## Install
 
@@ -42,7 +42,6 @@ All secrets come from environment variables. Provider credentials are **never** 
 | `POLYGON_API_KEY` | `polygon` |
 | `FRED_API_KEY` | `fred` |
 | `FINNHUB_API_KEY` | `finnhub` |
-| `FIRSTRATE_API_KEY` | `firstrate` |
 
 Set only the ones you use. `list_sources` tells the model which sources are configured.
 
@@ -109,15 +108,22 @@ aurastream-mcp [--http] [--host HOST] [--port PORT] [--path /mcp]
 - "Get daily BTCUSDT and ETHUSDT from Binance for 2025 and compute their 30-day rolling correlation."
 - "Show the last 20 hourly bars of EUR_USD from Oanda."
 - "Pull UNRATE and DFF from FRED since 2015 and describe how they moved together."
+- "Show Binance BTCUSDT perpetual funding rates for June 2025."
 - "Fetch SPY and QQQ daily from Yahoo for the last 6 months and compare max drawdowns."
 
 ## Limits
 
 - Historical data, not a real-time feed. The last bar may still be forming.
-- Every data call counts against your monthly AuraStream allowance (free plan: 500 calls/month). When it runs out the tool says so; it resets on the 1st.
+- Every data call counts against your monthly AuraStream allowance (free plan: 500 calls/month). When it runs out the tool says so; it resets on the 1st at 00:00 UTC. The free plan also allows about 1 request per second.
 - Results are capped per ticker (default 100 rows, max 1000) to keep the model's context manageable. For long, fine-grained histories use the REST API or the Python client directly.
 - The API times out after 120 seconds; split very large requests.
-- Interval support varies by source (see the [docs](https://unbiasedalpha.github.io/aurastream-docs/data-sources/overview/)).
+- Interval support varies by source (see the [docs](https://aurastream.unbiased-alpha.com/docs/data-sources/overview/)).
+
+## Known issues
+
+- **Credential field names.** The API docs name the provider credential fields `api_key` (Polygon, FRED, Finnhub) and `api_key` / `secret_key` (Alpaca), while the AuraStream backend library reads `key` (and `secret` for Alpaca). Until that is settled, the server sends each value under both names, e.g. `{"api_key": k, "key": k}`. This has not been tested against the live API yet.
+- **FirstRate** has no docs page; its ticker format and intervals are not documented, so the server only applies the general interval list.
+- Non-bar data (funding, order book, trades, quotes, earnings, Finnhub financials) is rendered generically as a table and has not been checked against live responses.
 
 ## Development
 

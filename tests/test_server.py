@@ -13,7 +13,7 @@ from aurastream_mcp.server import latest_window, list_sources_text, mcp, resolve
 
 CRED_VARS = [
     "OANDA_ACCOUNT_ID", "OANDA_TOKEN", "OANDA_ENVIRONMENT", "ALPACA_API_KEY", "ALPACA_SECRET_KEY",
-    "POLYGON_API_KEY", "FRED_API_KEY", "FINNHUB_API_KEY", "FIRSTRATE_API_KEY",
+    "POLYGON_API_KEY", "FRED_API_KEY", "FINNHUB_API_KEY",
 ]
 
 
@@ -42,8 +42,19 @@ def test_body_public_source_has_no_credentials():
     body = build_body("yahoo", ["SPY", "AAPL"], "2025-01-01", "2025-02-01", "1d")
     assert body == {
         "tickerlist": ["SPY", "AAPL"], "start": "2025-01-01", "end": "2025-02-01",
-        "interval": "1d", "source": "yahoo",
+        "interval": "1d", "source": "yahoo", "dtype": "bars",
     }
+    # dtype is only sent for sources with more than one data type.
+    assert "dtype" not in build_body("bybit", ["BTCUSDT"], "2025-01-01", "2025-02-01")
+
+
+def test_body_public_sources_with_extra_params():
+    funding = build_body("binance", ["BTCUSDT"], "2025-06-01", "2025-06-30", "1h", "funding", instrument="perpetual")
+    assert funding["dtype"] == "funding" and funding["instrument"] == "perpetual"
+    assert "credentials" not in funding
+    assert "credentials" not in build_body("firstrate", ["ES"], "2025-01-01", "2025-02-01")
+    assert build_body("kraken", ["XXBTZUSD"], "2025-06-01", "2025-06-30", "1h", instrument="spot")["instrument"] == "spot"
+    assert build_body("bybit", ["BTCUSD"], "2025-06-01", "2025-06-30", category="inverse")["category"] == "inverse"
 
 
 def test_body_oanda_from_env(monkeypatch):
@@ -59,10 +70,14 @@ def test_body_alpaca_and_fred_field_names(monkeypatch):
     monkeypatch.setenv("ALPACA_API_KEY", "ak")
     monkeypatch.setenv("ALPACA_SECRET_KEY", "as")
     monkeypatch.setenv("FRED_API_KEY", "fk")
-    alpaca = build_body("alpaca", ["BTC/USD"], "2025-01-09", "2025-01-10", "1d", "trades", assetclass="crypto")
-    assert alpaca["credentials"] == {"key": "ak", "secret": "as"}
+    alpaca = build_body("alpaca", ["BTC/USD"], "2025-01-09", "2025-01-10", "1d", "trades", assetclass="crypto", feed="iex")
+    # Docs say api_key/secret_key, the backend library reads key/secret: both are sent.
+    assert alpaca["credentials"] == {"api_key": "ak", "key": "ak", "secret_key": "as", "secret": "as"}
+    assert alpaca["feed"] == "iex"
     assert alpaca["dtype"] == "trades" and alpaca["assetclass"] == "crypto"
-    assert build_body("fred", ["UNRATE"], "2020-01-01", "2025-01-01")["credentials"] == {"key": "fk"}
+    fred = build_body("fred", ["UNRATE"], "2020-01-01", "2025-01-01", "1M", frequency="annual")
+    assert fred["credentials"] == {"api_key": "fk", "key": "fk"}
+    assert fred["frequency"] == "annual"
 
 
 def test_missing_credentials_names_env_vars():
@@ -77,7 +92,11 @@ def test_missing_credentials_names_env_vars():
     [
         ({"source": "nope"}, "Unknown source"),
         ({"start": "01/01/2025"}, "start must be"),
-        ({"interval": "2d"}, "Unsupported interval"),
+        ({"interval": "2d"}, "does not support interval"),
+        ({"interval": "1s"}, "does not support interval"),
+        ({"start": "2025-01-01 10:00"}, "start must be"),
+        ({"source": "binance", "tickers": ["BTCUSDT"], "instrument": "futures"}, "instrument for 'binance' must be"),
+        ({"source": "binance", "tickers": ["BTCUSDT"], "frequency": "annual"}, "does not apply"),
         ({"dtype": "trades"}, "supports dtype"),
         ({"price_type": "M"}, "does not apply"),
         ({"tickers": [" "]}, "at least one ticker"),
@@ -111,7 +130,7 @@ async def test_get_timeseries_sends_env_credentials_and_api_key(monkeypatch):
     request = route.calls.last.request
     assert request.headers["x-api-key"] == "test-key"
     sent = json.loads(request.content)
-    assert sent["credentials"] == {"key": "poly-secret"}
+    assert sent["credentials"] == {"api_key": "poly-secret", "key": "poly-secret"}
     assert sent["tickerlist"] == ["AAPL"] and sent["source"] == "polygon"
     out = text_of(result)
     assert "timestamp,Open,High,Low,Close,Volume" in out
@@ -131,7 +150,7 @@ async def test_unknown_argument_cannot_inject_credentials(monkeypatch):
                  "credentials": {"key": "from-chat"}},
             )
     assert route.called
-    assert json.loads(route.calls.last.request.content)["credentials"] == {"key": "env-fred"}
+    assert json.loads(route.calls.last.request.content)["credentials"] == {"api_key": "env-fred", "key": "env-fred"}
 
 
 @respx.mock
@@ -226,8 +245,8 @@ def test_list_sources_reports_configuration(monkeypatch):
 def test_latest_window():
     now = datetime(2025, 6, 15, 12, 0, tzinfo=timezone.utc)
     assert latest_window("yahoo", "1d", 10, now) == ("2025-05-26", "2025-06-16")
-    start, end = latest_window("binance", "1h", 10, now)
-    assert start == "2025-06-14 20:55" and end == "2025-06-15 12:01"
+    assert latest_window("binance", "1h", 10, now) == ("2025-06-13", "2025-06-16")
+    assert latest_window("oanda", "1M", 3, now)[0] == "2025-01-21"
 
 
 @respx.mock
