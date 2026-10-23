@@ -393,6 +393,17 @@ SOURCES: dict[str, Source] = {
                   "Needs access to the tables you request.",
         ),
         Source(
+            name="econcalendar",
+            label="US Economic Calendar",
+            asset_classes="Scheduled release times of US economic data (jobs, CPI, GDP, retail sales, housing) and FOMC statements",
+            ticker_format="Agencies: bls, bea, census, fomc",
+            intervals=("1d",),
+            credentials=(CredentialField(("user_agent",), "EDGAR_USER_AGENT", optional=True),),
+            fields="release, period (BEA, Census; fomc: meeting dates), projections (fomc: true with the Summary of Economic Projections)",
+            notes="Times are in UTC. bls needs EDGAR_USER_AGENT (BLS refuses anonymous scripts); the other agencies need nothing. "
+                  "Schedules only, no released values. Coverage: bls current and next year, bea upcoming, census from 2025, fomc from 2021.",
+        ),
+        Source(
             name="tradingeconomics",
             label="Trading Economics",
             asset_classes="Economic indicators by country",
@@ -419,32 +430,28 @@ SOURCES: dict[str, Source] = {
             },
         ),
         Source(
-            name="finra",
-            label="FINRA",
-            asset_classes="US stock short interest and daily short-sale volume",
-            ticker_format="US stock symbols, e.g. AAPL, TSLA, GME",
-            intervals=("1d",),
-            params={"dataset": Param('"short_interest" (default, twice monthly) or "short_volume" (daily)',
-                                     ("short_interest", "short_volume"))},
-            fields="short_interest: short_interest, previous_short_interest, change, change_pct, avg_daily_volume, days_to_cover. "
-                   "short_volume: short_volume, short_exempt_volume, total_volume, short_ratio",
-            notes="Short interest is published about 7 business days after the settlement date it is stamped at: shift before backtesting.",
-        ),
-        Source(
             name="edgar",
             label="SEC EDGAR",
-            asset_classes="US insider trades (Form 4) and reported company financials (XBRL)",
-            ticker_format="US stock symbols (AAPL) or SEC CIK numbers (320193)",
+            asset_classes="US insider trades (Form 4), reported company financials (XBRL), earnings release filings, "
+                          "fails-to-deliver and institutional holdings (13F)",
+            ticker_format="US stock symbols (AAPL) or SEC CIK numbers (320193); 13f: the manager's CIK (1067983 = Berkshire); "
+                          "ftd: symbol or CUSIP",
             intervals=("1d",),
             credentials=(CredentialField(("user_agent",), "EDGAR_USER_AGENT"),),
             params={
-                "dataset": Param('"insider" (default, Form 4 trades) or "financials"', ("insider", "financials")),
+                "dataset": Param('"insider" (default, Form 4 trades), "financials", "earnings" (8-K item 2.02 filings), '
+                                 '"ftd" (fails-to-deliver) or "13f" (institutional holdings)',
+                                 ("insider", "financials", "earnings", "ftd", "13f")),
                 "concepts": Param("financials only: XBRL concepts, e.g. Revenues; default is a standard set", is_list=True),
                 "period": Param('financials only: "quarter" (default) or "annual"', ("quarter", "annual")),
             },
             fields="insider: owner, officer_title, buy_shares, buy_value, sell_shares, sell_value, other_shares_net, plan_10b5_1, "
-                   "shares_owned_after, ... (one row per filing, stamped when it became public). financials: one row per filing with each concept's value and period",
-            notes='EDGAR_USER_AGENT is a name and contact email, e.g. "Your Company contact@yourcompany.com" (SEC rule; no registration).',
+                   "shares_owned_after, ... (one row per filing, stamped when it became public). financials: one row per filing with each concept's value and period. "
+                   "earnings: event_date, items, url (one row per earnings 8-K, stamped at SEC acceptance). ftd: fails, price, cusip, symbol. "
+                   "13f: report_period, n_positions, total_value, holdings (list of issuer, cusip, value, shares, put_call)",
+            notes='EDGAR_USER_AGENT is a name and contact email, e.g. "Your Company contact@yourcompany.com" (SEC rule; no registration). '
+                  "ftd is published twice a month about two weeks after each half-month and stamped at the settlement date; "
+                  "13f is filed up to 45 days after the quarter end (request a year or less for large managers).",
         ),
         Source(
             name="hmrc",
@@ -541,6 +548,15 @@ SOURCES: dict[str, Source] = {
             },
             fields="daily: tempmax, tempmin, temp, feelslike, humidity, precip, snow, windspeed, pressure, cloudcover, conditions, ...",
             notes="1d rows are local calendar days stamped at 00:00; 1h rows are stamped in UTC.",
+        ),
+        Source(
+            name="tsa",
+            label="TSA Checkpoint Numbers",
+            asset_classes="Daily US airport checkpoint travelers, from 2019 (travel demand)",
+            ticker_format="throughput",
+            intervals=("1d",),
+            fields="travelers",
+            notes="Published the next morning (around 9:00 New York). Compare with the same weekday a year earlier.",
         ),
     ]
 }

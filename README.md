@@ -1,6 +1,6 @@
 # aurastream-mcp
 
-An [MCP](https://modelcontextprotocol.io) server for [AuraStream](https://aurastream.unbiased-alpha.com), the unified historical data API. It lets Claude Desktop, Claude Code, ChatGPT and other MCP clients pull OHLCV bars (and, for some sources, funding rates, trades, quotes, order books and earnings) from crypto exchanges, Yahoo Finance, Oanda, Alpaca, Polygon and others, plus macro, positioning and trade-flow data such as FRED, CFTC Commitments of Traders, FINRA short interest, SEC insider trades and UK/EU/US/Hong Kong metals trade, and historical weather: all 37 AuraStream sources through one tool.
+An [MCP](https://modelcontextprotocol.io) server for [AuraStream](https://aurastream.unbiased-alpha.com), the unified historical data API. It lets Claude Desktop, Claude Code, ChatGPT and other MCP clients pull OHLCV bars (and, for some sources, funding rates, trades, quotes, order books and earnings) from crypto exchanges, Yahoo Finance, Oanda, Alpaca, Polygon and others, plus macro, positioning and trade-flow data such as FRED, CFTC Commitments of Traders, SEC insider trades, earnings filings, fails-to-deliver and 13F holdings, the US economic release calendar, UK/EU/US/Hong Kong metals trade, TSA travel numbers and historical weather: all 38 AuraStream sources through one tool.
 
 Ask "plot BTC daily closes for Q1 from Binance", "compare SPY and QQQ drawdowns this year" or "how have hedge funds positioned in gold futures since 2020?" and the model calls AuraStream for the data.
 
@@ -20,11 +20,11 @@ Sources exposed:
 |---|---|
 | Crypto | `binance`, `bybit`, `kraken`, `deribit`, `kucoin`, `dydx`, `hyperliquid`, `lyra` (Derive); with your own key: `coinapi`; with a [Nemeton](https://unbiased-alpha.com) subscription: `nemeton` (order book signals) |
 | Equities, FX, futures, CFDs | `yahoo`; with your own account: `oanda`, `alpaca`, `polygon`, `firstrate`, `tradestation`, `cityindex` |
-| Macro and energy | `treasury`, `worldbank`, `sdmx` (BIS, ECB, IMF, OECD...); with a free key: `fred`, `eia`; with your own key: `tradingeconomics`, `nasdaq` |
-| Fundamentals | `edgar` (insider trades, reported financials); with your own key: `finnhub` |
-| Positioning and flows | `cftc` (Commitments of Traders), `finra` (short interest), `hmrc`, `comext`, `hktrade`; with a free key: `uscensus` |
+| Macro and energy | `treasury`, `worldbank`, `sdmx` (BIS, ECB, IMF, OECD...), `econcalendar` (US release times); with a free key: `fred`, `eia`; with your own key: `tradingeconomics`, `nasdaq` |
+| Fundamentals | `edgar` (insider trades, reported financials, earnings filings, fails-to-deliver, 13F holdings); with your own key: `finnhub` |
+| Positioning and flows | `cftc` (Commitments of Traders), `hmrc`, `comext`, `hktrade`; with a free key: `uscensus` |
 | Crypto fundamentals and news | `defillama`, `gdelt`; with a free key: `coingecko` |
-| Weather | `openmeteo`; with your own key: `visualcrossing` |
+| Weather and travel | `openmeteo`, `tsa` (daily air travelers); with your own key: `visualcrossing` |
 
 Dates are `YYYY-MM-DD`. Intervals follow the API: upper-case `M` is minutes, lower-case `m` is months (`15M` = 15 minutes, `1m` = one month). The server checks intervals, dtypes and parameters against each source's documented values before calling the API.
 
@@ -56,7 +56,7 @@ All secrets come from environment variables. Provider credentials are **never** 
 | `FIRSTRATE_USER_ID` | `firstrate`: the user ID FirstRate Data gives you for API downloads |
 | `EIA_API_KEY` | `eia` (free at [eia.gov](https://www.eia.gov/opendata/register.php)) |
 | `CENSUS_API_KEY` | `uscensus` (free at [census.gov](https://api.census.gov/data/key_signup.html)) |
-| `EDGAR_USER_AGENT` | `edgar`: your name and contact email, e.g. `Your Company contact@yourcompany.com`. The SEC requires it; no registration. |
+| `EDGAR_USER_AGENT` | `edgar` and `econcalendar` (BLS): your name and contact email, e.g. `Your Company contact@yourcompany.com`. The SEC requires it; no registration. |
 | `NEMETON_API_KEY` | `nemeton`: the key from your Nemeton subscription |
 | `COINAPI_KEY` | `coinapi` |
 | `COINGECKO_API_KEY` or `COINGECKO_DEMO_API_KEY` | `coingecko`: a Pro key, or a free Demo key (last 365 days only) |
@@ -151,7 +151,7 @@ aurastream-mcp [--http] [--host HOST] [--port PORT] [--path /mcp]
 ## Known issues
 
 - Non-bar data (funding, order and position books, trades, quotes, earnings, Finnhub financials and the macro, positioning and trade sources) is rendered generically as a table.
-- Several sources are stamped at the period they describe but published later (EIA, FINRA short interest, the trade sources). `list_sources` notes the lag; shift the data before backtesting.
+- Several sources are stamped at the period they describe but published later (EIA, EDGAR fails-to-deliver, the trade sources). `list_sources` notes the lag; shift the data before backtesting.
 - GDELT search queries are throttled by GDELT itself; keep ranges short. `dataset="themes"` is not throttled.
 
 ## Development

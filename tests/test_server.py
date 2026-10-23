@@ -104,7 +104,8 @@ def test_body_new_public_sources():
         "tickerlist": ["GC", "ZN"], "start": "2020-01-01", "end": "2025-01-01", "interval": "1w", "source": "cftc",
         "report": "legacy", "options": True, "as_of": "report",
     }
-    assert build_body("finra", ["AAPL"], "2024-01-01", "2024-02-01", dataset="short_volume")["dataset"] == "short_volume"
+    assert build_body("tsa", ["throughput"], "2025-01-01", "2025-02-01")["source"] == "tsa"
+    assert "credentials" not in build_body("econcalendar", ["fomc"], "2025-01-01", "2025-12-31")
     assert build_body("comext", ["gold:CH"], "2020-01-01", "2025-01-01", "1m", reporter="DE")["reporter"] == "DE"
     themes = build_body("gdelt", ["ECON_GOLDPRICE"], "2024-01-01", "2024-02-01", "1h", dataset="themes")
     assert themes["dataset"] == "themes" and "credentials" not in themes
@@ -123,6 +124,8 @@ def test_body_new_credentialed_sources(monkeypatch):
                        concepts=[" Revenues ", "NetIncomeLoss"], period="annual")
     assert edgar["credentials"] == {"user_agent": "Acme ops@acme.test"}
     assert edgar["concepts"] == ["Revenues", "NetIncomeLoss"] and edgar["period"] == "annual"
+    assert build_body("edgar", ["GME"], "2025-01-01", "2025-02-01", dataset="ftd")["dataset"] == "ftd"
+    assert build_body("econcalendar", ["bls"], "2025-01-01", "2025-12-31")["credentials"] == {"user_agent": "Acme ops@acme.test"}
 
 
 def test_body_firstrate(monkeypatch):
@@ -167,7 +170,7 @@ def test_missing_credentials_names_env_vars():
         ({"source": "hmrc", "tickers": ["gold"], "interval": "1d"}, "does not support interval"),
         ({"source": "cftc", "tickers": ["GC"], "interval": "1w", "options": "yes"}, "must be true or false"),
         ({"source": "cftc", "tickers": ["GC"], "interval": "1w", "report": "weekly"}, "report for 'cftc' must be"),
-        ({"source": "finra", "tickers": ["AAPL"], "dataset": "insider"}, "dataset for 'finra' must be"),
+        ({"source": "edgar", "tickers": ["AAPL"], "dataset": "short_volume"}, "dataset for 'edgar' must be"),
         ({"source": "comext", "tickers": ["gold"], "interval": "1m", "reporter": " "}, "non-empty string"),
         ({"source": "yahoo", "dataset": "themes"}, "does not apply"),
     ],
@@ -327,8 +330,9 @@ def test_list_sources_reports_configuration(monkeypatch):
     polygon = text.split("- polygon")[1].split("\n- ")[0]
     assert "NOT configured (set POLYGON_API_KEY)" in polygon
     assert "- hktrade (Hong Kong Trade)" in text
-    finra = text.split("- finra")[1].split("\n- ")[0]
-    assert "param dataset:" in finra and "fields: short_interest:" in finra
+    edgar = text.split("- edgar")[1].split("\n- ")[0]
+    assert "param dataset:" in edgar and "13f" in edgar
+    assert "- finra" not in text
 
 
 def test_latest_window():
@@ -353,7 +357,7 @@ async def test_get_latest_returns_requested_bars():
 # --- sources added in 0.1.2 -------------------------------------------------
 
 def test_all_api_sources_are_exposed():
-    assert len(SOURCES) == 37
+    assert len(SOURCES) == 38
     for name in ("deribit", "kucoin", "dydx", "hyperliquid", "lyra", "sdmx", "openmeteo"):
         assert not SOURCES[name].needs_credentials
 

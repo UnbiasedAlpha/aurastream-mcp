@@ -23,7 +23,7 @@ INSTRUCTIONS = """\
 AuraStream is a historical data API behind one endpoint: market data (crypto exchanges and DEXs,
 equities, FX, futures, CFDs), crypto order book signals (Nemeton), macro and energy (FRED, EIA, US Treasury,
 World Bank, SDMX central bank series, Trading Economics, Nasdaq Data Link), positioning and flows (CFTC,
-FINRA short interest, SEC insider trades, UK/EU/US/Hong Kong trade), crypto fundamentals and news
+SEC insider trades, earnings filings, fails-to-deliver and 13F holdings, UK/EU/US/Hong Kong trade), crypto fundamentals and news
 (DefiLlama, CoinGecko, GDELT) and historical weather (Open-Meteo, Visual Crossing).
 Call list_sources first if unsure which source covers something or how its tickers are written.
 Intervals: upper-case M is minutes, lower-case m is months (15M = 15 minutes, 1m = one month).
@@ -160,7 +160,7 @@ async def get_timeseries(
     sessiontemplate: Annotated[str | None, Field(description="tradestation only: trading session, e.g. Default or USEQPreAndPost.")] = None,
     closed_only: Annotated[bool | None, Field(description="tradestation only: leave out the bar still forming (default true).")] = None,
     bartype: Annotated[Literal["bar", "tick"] | None, Field(description="cityindex only: bar (default) or tick.")] = None,
-    dataset: Annotated[str | None, Field(description="finra: short_interest (default) or short_volume. edgar: insider (default) or financials. gdelt: themes.")] = None,
+    dataset: Annotated[str | None, Field(description="edgar: insider (default), financials, earnings, ftd or 13f. gdelt: themes.")] = None,
     report: Annotated[Literal["disaggregated", "tff", "legacy"] | None, Field(description="cftc only; default depends on the symbol.")] = None,
     options: Annotated[bool | None, Field(description="cftc only: include options (futures-equivalent).")] = None,
     as_of: Annotated[Literal["release", "report", "realtime_start", "date"] | None, Field(description="cftc: release (default, stamped at Friday publication, no look-ahead) or report (Tuesday position date). fred: realtime_start (default, stamped at publication) or date (period described).")] = None,
