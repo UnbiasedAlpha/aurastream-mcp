@@ -9,7 +9,7 @@ Ask "plot BTC daily closes for Q1 from Binance", "compare SPY and QQQ drawdowns 
 | Tool | What it does |
 |---|---|
 | `list_sources()` | Sources, asset classes, ticker formats, intervals, supported dtypes and source-specific parameters, and whether provider credentials are needed and configured. No API call. |
-| `get_timeseries(source, tickers, start, end, interval="1d", dtype="bars", price_type=None, instrument=None, assetclass=None, category=None, feed=None, frequency=None, dataset=None, report=None, options=None, as_of=None, concepts=None, period=None, mode=None, reporter=None, max_rows=100)` | Calls `POST /timeseries`. Returns one CSV block per ticker (`timestamp,Open,High,Low,Close,Volume` for market bars, the source's own fields otherwise), capped at the most recent `max_rows` rows (max 1000) with the total row count noted. |
+| `get_timeseries(source, tickers, start, end, interval="1d", dtype="bars", price_type=None, instrument=None, ticktype=None, assetclass=None, category=None, feed=None, adjustment=None, indicator=None, dataset=None, report=None, options=None, as_of=None, concepts=None, period=None, mode=None, reporter=None, max_rows=100)` | Calls `POST /timeseries`. Returns one CSV block per ticker (`timestamp,Open,High,Low,Close,Volume` for market bars, the source's own fields otherwise), capped at the most recent `max_rows` rows (max 1000) with the total row count noted. |
 | `get_latest(source, tickers, interval="1d", bars=10)` | The most recent N bars per ticker, without picking dates. |
 
 Each `get_timeseries` / `get_latest` call is one AuraStream API call.
@@ -18,7 +18,7 @@ Sources exposed:
 
 | Group | Sources |
 |---|---|
-| Market data | `binance`, `bybit`, `kraken`, `yahoo`, `firstrate`; with your own account: `oanda`, `alpaca`, `polygon` |
+| Market data | `binance`, `bybit`, `kraken`, `yahoo`; with your own account: `oanda`, `alpaca`, `polygon` |
 | Macro and energy | `treasury`, `worldbank`; with a free key: `fred`, `eia` |
 | Fundamentals | `edgar` (insider trades, reported financials); with your own key: `finnhub` |
 | Positioning and flows | `cftc` (Commitments of Traders), `finra` (short interest), `hmrc`, `comext`, `hktrade`; with a free key: `uscensus` |
@@ -136,9 +136,7 @@ aurastream-mcp [--http] [--host HOST] [--port PORT] [--path /mcp]
 
 ## Known issues
 
-- **Credential field names.** The API docs name the provider credential fields `api_key` (Polygon, FRED, Finnhub) and `api_key` / `secret_key` (Alpaca), while the AuraStream backend library reads `key` (and `secret` for Alpaca). Until that is settled, the server sends each value under both names, e.g. `{"api_key": k, "key": k}`. This has not been tested against the live API yet.
-- **FirstRate** has no docs page; its ticker format and intervals are not documented, so the server only applies the general interval list.
-- Non-bar data (funding, order book, trades, quotes, earnings, Finnhub financials and the macro, positioning and trade sources) is rendered generically as a table and has not been checked against live responses.
+- Non-bar data (funding, order and position books, trades, quotes, earnings, Finnhub financials and the macro, positioning and trade sources) is rendered generically as a table.
 - Several sources are stamped at the period they describe but published later (EIA, FINRA short interest, the trade sources). `list_sources` notes the lag; shift the data before backtesting.
 - GDELT search queries are throttled by GDELT itself; keep ranges short. `dataset="themes"` is not throttled.
 

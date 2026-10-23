@@ -84,7 +84,7 @@ def build_body(
         raise AuraStreamError(f"Source '{source}' supports dtype {', '.join(spec.dtypes)}; got '{dtype}'.")
 
     extras = {name: value for name, value in params.items() if value is not None}
-    for name, value in extras.items():
+    for name, value in list(extras.items()):
         param = spec.params.get(name)
         if param is None:
             raise AuraStreamError(f"Parameter '{name}' does not apply to source '{source}'.")
@@ -99,6 +99,8 @@ def build_body(
             raise AuraStreamError(f"{name} for '{source}' must be one of {', '.join(param.choices)}; got '{value}'.")
         elif param.choices is None and not (isinstance(value, str) and value.strip()):
             raise AuraStreamError(f"{name} for '{source}' must be a non-empty string.")
+        if param.api_name:
+            extras[param.api_name] = extras.pop(name)
 
     body: dict[str, Any] = {
         "tickerlist": tickers,
@@ -107,8 +109,14 @@ def build_body(
         "interval": interval,
         "source": source,
     }
-    # Only send dtype where the source has more than one; matches the docs examples.
-    if len(spec.dtypes) > 1:
+    if spec.dtype_fields is not None:
+        # Sources whose data type is not a plain "dtype" field (e.g. binance funding).
+        for name, value in spec.dtype_fields[dtype].items():
+            if extras.get(name, value) != value:
+                raise AuraStreamError(f"dtype '{dtype}' for '{source}' needs {name} '{value}'; got '{extras[name]}'.")
+            body[name] = value
+    elif len(spec.dtypes) > 1:
+        # Only send dtype where the source has more than one; matches the docs examples.
         body["dtype"] = dtype
     body.update(extras)
     creds = credentials_from_env(source, env)
