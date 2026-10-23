@@ -22,6 +22,7 @@ class CredentialField:
     fields: tuple[str, ...]
     env: str  # environment variable the value is read from
     default: str | None = None  # used when the env var is unset
+    optional: bool = False  # sent when set, never required
 
 
 @dataclass(frozen=True)
@@ -31,6 +32,8 @@ class Param:
     choices: tuple[str, ...] | None = None
     is_list: bool = False
     is_bool: bool = False
+    is_int: bool = False
+    is_dict: bool = False  # a JSON object, e.g. nasdaq filters
     # Name in the request body when it differs from the tool argument.
     api_name: str | None = None
 
@@ -49,6 +52,10 @@ class Source:
     # "dtype" field; None = send "dtype" when the source has more than one.
     dtype_fields: dict[str, dict[str, str]] | None = None
     credentials: tuple[CredentialField, ...] = ()
+    # True when the optional credential fields are alternatives and one of them is needed.
+    credentials_one_of: bool = False
+    # "latlon": tickers are locations, written "lat,lon" and sent as {"latitude", "longitude"}.
+    ticker_kind: str = "text"
     # Optional source-specific request parameters.
     params: dict[str, Param] = field(default_factory=dict)
     fields: str = ""  # what each row holds, when it is not OHLCV
@@ -56,7 +63,7 @@ class Source:
 
     @property
     def needs_credentials(self) -> bool:
-        return bool(self.credentials)
+        return self.credentials_one_of or any(not c.optional for c in self.credentials)
 
 
 # General interval list from api-reference/timeseries.md.
@@ -64,6 +71,13 @@ GENERAL_INTERVALS = ("1s", "5s", "30s", "1M", "5M", "15M", "30M", "1h", "4h", "1
 
 _TRADE_PRODUCTS = "gold (HS 7108), silver (7106), platinum_group (7110), copper_refined (7403), copper_ore (2603), aluminium (7601), nickel (7502), zinc (7901)"
 _MONTHLY_NOTE = "Monthly, stamped at the first day of the month; interval is always 1m."
+_NEMETON_METRICS = (
+    "cumulative-depth", "depth-ratio", "dollar-value-imbalance", "dynamic-orderflow-imbalance", "ivdepth",
+    "liquidity-consumption-rate", "liquidity-imbalance", "liquidity-spread-depth", "maxdepth", "mid",
+    "normalized-spread", "orderbook-pressure", "orderbook-slope", "price-movement-potential", "quantity-imbalance",
+    "quote-asymmetry", "quote-concentration", "quote-intensity", "quote-skewness", "spread",
+    "static-orderflow-imbalance", "trade-imbalance", "weighted-mid",
+)
 
 SOURCES: dict[str, Source] = {
     s.name: s
@@ -102,6 +116,91 @@ SOURCES: dict[str, Source] = {
                 "ticktype": Param('futures only: "trade" (default), "mark" or "spot" (index) price', ("trade", "mark", "spot")),
             },
             notes="Spot returns only the latest 720 bars whatever the dates, and has no 12h; use futures for history.",
+        ),
+        Source(
+            name="deribit",
+            label="Deribit",
+            asset_classes="Crypto futures, perpetuals and options",
+            ticker_format="Deribit instrument names, e.g. BTC-PERPETUAL, ETH-PERPETUAL, BTC-27MAR26 (future), BTC-27MAR26-100000-C (option)",
+            intervals=("1M", "3M", "5M", "10M", "15M", "30M", "1h", "2h", "3h", "6h", "12h", "1d"),
+            fields="Open, High, Low, Close, Volume, QuoteVolume",
+        ),
+        Source(
+            name="kucoin",
+            label="KuCoin",
+            asset_classes="Crypto futures contracts and KuCoin indices",
+            ticker_format="KuCoin Futures symbols, e.g. XBTUSDTM, ETHUSDTM; indices start with a dot, e.g. .KXBT, .KETH",
+            intervals=("1M", "5M", "15M", "30M", "1h", "2h", "4h", "8h", "12h", "1d", "1w"),
+            notes="Spot pairs such as BTC-USDT are not supported. KuCoin writes Bitcoin as XBT in futures symbols.",
+        ),
+        Source(
+            name="dydx",
+            label="dYdX",
+            asset_classes="Crypto perpetuals on dYdX v4",
+            ticker_format="Market names BASE-USD, e.g. BTC-USD, ETH-USD, SOL-USD",
+            intervals=("1M", "5M", "15M", "30M", "1h", "4h", "1d"),
+            fields="open, high, low, close, baseTokenVolume, usdVolume, trades, startingOpenInterest, "
+                   "orderbookMidPriceOpen, orderbookMidPriceClose",
+            notes="Bars are stamped at their open time (UTC).",
+        ),
+        Source(
+            name="hyperliquid",
+            label="Hyperliquid",
+            asset_classes="Crypto perpetuals on Hyperliquid",
+            ticker_format="Coin names, e.g. BTC, ETH, HYPE",
+            intervals=("1M", "3M", "5M", "15M", "30M", "1h", "2h", "4h", "8h", "12h", "1d", "3d", "1w", "1m"),
+            fields="Open, High, Low, Close, Volume, Count (trades)",
+            notes="Only the most recent 5,000 bars of each interval are available; use a coarser interval for long ranges.",
+        ),
+        Source(
+            name="lyra",
+            label="Derive (Lyra)",
+            asset_classes="Crypto options and perpetuals trades on Derive, aggregated into bars",
+            ticker_format="The underlying, e.g. BTC, ETH; the result has one series per traded instrument (e.g. BTC-20250131-100000-C)",
+            intervals=("1M", "5M", "15M", "30M", "1h", "4h", "1d", "1w"),
+            params={"instrument": Param('"option" (default) or "perp"', ("option", "perp"))},
+            fields="Open, High, Low, Close (volume-weighted trade prices), Mark_Price_open..close, Index_Price_open..close, Volume",
+        ),
+        Source(
+            name="coinapi",
+            label="CoinAPI",
+            asset_classes="Crypto spot and derivatives across hundreds of exchanges",
+            ticker_format="CoinAPI symbol IDs EXCHANGE_TYPE_BASE_QUOTE, e.g. BITSTAMP_SPOT_BTC_USD, COINBASE_SPOT_ETH_USD, KRAKENFTS_PERP_BTC_USD",
+            intervals=("1s", "5s", "10s", "15s", "30s", "1M", "2M", "3M", "5M", "10M", "15M", "30M",
+                       "1h", "2h", "3h", "4h", "6h", "8h", "12h", "1d", "1m", "1y"),
+            credentials=(CredentialField(("key",), "COINAPI_KEY"),),
+            fields="price_open, price_high, price_low, price_close, volume_traded, trades_count",
+            notes="Uses your CoinAPI plan's credits. Bars are stamped at their close (UTC).",
+        ),
+        Source(
+            name="coingecko",
+            label="CoinGecko",
+            asset_classes="Daily crypto price, market cap and volume for thousands of coins",
+            ticker_format="CoinGecko coin IDs (last part of the coin's page URL), e.g. bitcoin, ethereum, solana",
+            intervals=("1d",),
+            credentials=(
+                CredentialField(("key",), "COINGECKO_API_KEY", optional=True),
+                CredentialField(("demo_key",), "COINGECKO_DEMO_API_KEY", optional=True),
+            ),
+            credentials_one_of=True,
+            params={"vs_currency": Param('quote currency, e.g. "USD" (default), "EUR"')},
+            fields="prices, market_caps, total_volumes",
+            notes="Needs COINGECKO_API_KEY (Pro) or COINGECKO_DEMO_API_KEY (free Demo key). Demo keys reach only the last "
+                  "365 days. Stamped at 00:00 UTC.",
+        ),
+        Source(
+            name="nemeton",
+            label="Nemeton",
+            asset_classes="Crypto order book signals (depth, imbalance, spread, order flow)",
+            ticker_format="SYMBOL_EXCHANGE_INSTRUMENT, e.g. BTCUSDT_BINANCE_PERPETUAL",
+            intervals=("1M", "5M", "15M", "30M", "1h", "4h", "1d"),
+            credentials=(CredentialField(("key",), "NEMETON_API_KEY"),),
+            params={
+                "metric": Param("signal to return (required)", _NEMETON_METRICS),
+                "level": Param("order book depth the metric is computed over; default 1000", is_int=True),
+            },
+            notes="Nemeton is a separate subscription from Unbiased Alpha ($250/month); NEMETON_API_KEY is the key it "
+                  "gives you. Data from 2023-12-27; at most 10,000 bars per request (ending at end).",
         ),
         Source(
             name="yahoo",
@@ -179,6 +278,42 @@ SOURCES: dict[str, Source] = {
             credentials=(CredentialField(("key",), "POLYGON_API_KEY"),),
             notes="Bars are stamped at their open time (UTC) and include VWAP and NTrades besides OHLCV.",
         ),
+        Source(
+            name="tradestation",
+            label="TradeStation",
+            asset_classes="US stocks, ETFs, futures and indices",
+            ticker_format="TradeStation symbols, e.g. AAPL, SPY, @ES (continuous E-mini S&P 500)",
+            intervals=("1M", "5M", "15M", "30M", "1h", "2h", "4h", "1d"),
+            credentials=(
+                CredentialField(("key",), "TRADESTATION_CLIENT_ID"),
+                CredentialField(("secret",), "TRADESTATION_CLIENT_SECRET"),
+                CredentialField(("refresh_token",), "TRADESTATION_REFRESH_TOKEN"),
+            ),
+            params={
+                "sessiontemplate": Param('trading session, e.g. "Default" (default) or "USEQPreAndPost"'),
+                "closed_only": Param("leave out the bar still forming; default true", is_bool=True),
+            },
+            fields="Open, High, Low, Close, TotalVolume, UpVolume, DownVolume, TotalTicks, OpenInterest, ...",
+            notes="Your TradeStation API client ID and secret, and a refresh token from TradeStation's OAuth sign-in. "
+                  "Bars are stamped at their close (UTC).",
+        ),
+        Source(
+            name="cityindex",
+            label="City Index",
+            asset_classes="CFDs on indices, FX, commodities and shares (bars and ticks)",
+            ticker_format="City Index market IDs as text, e.g. 401204130",
+            intervals=("1M", "5M", "15M", "30M", "1h", "2h", "4h", "1d"),
+            credentials=(
+                CredentialField(("username",), "CITYINDEX_USERNAME"),
+                CredentialField(("password",), "CITYINDEX_PASSWORD"),
+                CredentialField(("key",), "CITYINDEX_APP_KEY"),
+            ),
+            params={
+                "bartype": Param('"bar" (default) or "tick"', ("bar", "tick")),
+                "price_type": Param('"MID" (default), "BID" or "ASK"', ("MID", "BID", "ASK"), api_name="dtype"),
+            },
+            fields="bars: Open, High, Low, Close. ticks: Price",
+        ),
         # --- macro and fundamentals ---------------------------------------------
         Source(
             name="fred",
@@ -232,6 +367,41 @@ SOURCES: dict[str, Source] = {
             ticker_format="tga, debt_to_penny, auctions (or auctions:10-Year to filter by term), avg_interest_rates, or any Fiscal Data endpoint path",
             intervals=("1d",),
             notes="TGA is in USD millions; a falling balance adds liquidity. Daily Treasury Statement data is published around 16:00 New York the next business day.",
+        ),
+        Source(
+            name="sdmx",
+            label="SDMX (BIS, ECB, Eurostat, IMF, OECD...)",
+            asset_classes="Central bank and statistics agency series",
+            ticker_format="Dataflow/key, e.g. BIS,WS_CBPOL,1.0/D.US (BIS policy rate, US, daily); each ticker should be one series",
+            intervals=("1d",),
+            params={"db": Param('SDMX provider ID (required): "BIS", "ECB", "ESTAT", "IMF", "OECD", ... (sdmx1 source list)')},
+            notes="interval, start and end are ignored: the full history comes at the series' own frequency. Pass 1d.",
+        ),
+        Source(
+            name="nasdaq",
+            label="Nasdaq Data Link",
+            asset_classes="Nasdaq Data Link (Quandl) tables",
+            ticker_format="Table codes PUBLISHER/TABLE, e.g. QDL/FON; the table needs a date column (old dataset codes like LBMA/GOLD do not work)",
+            intervals=("1d",),
+            credentials=(CredentialField(("key",), "NASDAQ_DATA_LINK_API_KEY"),),
+            params={
+                "filters": Param('column filters per table, e.g. {"QDL/FON": {"contract_code": "967654"}}', is_dict=True),
+                "assetcol": Param('split the table into one series per value of this column, e.g. "contract_code"'),
+                "index": Param('date column used as the time index; default "date"'),
+            },
+            notes="interval, start and end are ignored: the whole table (after filters) is downloaded, so filter. Pass 1d. "
+                  "Needs access to the tables you request.",
+        ),
+        Source(
+            name="tradingeconomics",
+            label="Trading Economics",
+            asset_classes="Economic indicators by country",
+            ticker_format="Country names as Trading Economics writes them, e.g. united states, germany, mexico",
+            intervals=("1d",),
+            credentials=(CredentialField(("key",), "TRADINGECONOMICS_API_KEY"),),
+            params={"indicator": Param('indicator name (required), e.g. "gdp", "inflation rate", "interest rate"')},
+            fields="Value, Category, Frequency, HistoricalDataSymbol, LastUpdate, DateTime",
+            notes="interval is ignored: values come at the indicator's own frequency. Pass 1d.",
         ),
         # --- positioning and flows ------------------------------------------------
         Source(
@@ -340,6 +510,37 @@ SOURCES: dict[str, Source] = {
             fields="themes: articles, share, tone",
             notes="Search queries are throttled by GDELT (beta): keep ranges short and queries few; their resolution is set by "
                   "the range length. Themes are not throttled and use the interval (15-minute base).",
+        ),
+        # --- weather ----------------------------------------------------------------
+        Source(
+            name="openmeteo",
+            label="Open-Meteo",
+            asset_classes="Historical weather by location",
+            ticker_format='Locations as "latitude,longitude", e.g. "48.85,2.35" (Paris); results are keyed latitude_longitude',
+            intervals=("1h", "1d"),
+            ticker_kind="latlon",
+            credentials=(CredentialField(("key",), "OPENMETEO_API_KEY", optional=True),),
+            params={
+                "variables": Param("Open-Meteo variables (required): hourly names with 1h (temperature_2m, precipitation, "
+                                   "wind_speed_10m), daily with 1d (temperature_2m_max, precipitation_sum)", is_list=True),
+                "timezone": Param('IANA time zone for timestamps and daily aggregation, e.g. "Europe/Paris"; default "GMT"'),
+            },
+            notes="No key needed; OPENMETEO_API_KEY is sent when set.",
+        ),
+        Source(
+            name="visualcrossing",
+            label="Visual Crossing",
+            asset_classes="Historical weather by location",
+            ticker_format='Locations as "latitude,longitude", e.g. "40.71,-74.01" (New York); results are keyed latitude_longitude',
+            intervals=("1h", "1d"),
+            ticker_kind="latlon",
+            credentials=(CredentialField(("key",), "VISUALCROSSING_API_KEY"),),
+            params={
+                "unit_group": Param('"us" (default: Fahrenheit, mph, inches), "metric", "uk" or "base"', ("us", "metric", "uk", "base")),
+                "variables": Param("only these fields, e.g. tempmax, tempmin, precip; default all", is_list=True),
+            },
+            fields="daily: tempmax, tempmin, temp, feelslike, humidity, precip, snow, windspeed, pressure, cloudcover, conditions, ...",
+            notes="1d rows are local calendar days stamped at 00:00; 1h rows are stamped in UTC.",
         ),
     ]
 }

@@ -15,14 +15,16 @@ from mcp_types import ToolAnnotations
 from pydantic import Field
 
 from . import __version__
-from .client import AuraStreamError, build_body, fetch
+from .client import AuraStreamError, build_body, fetch, location_key
 from .formatting import DEFAULT_MAX_ROWS, HARD_MAX_ROWS, format_response
 from .sources import DTYPES, INTERVALS, SOURCES, intervals_for
 
 INSTRUCTIONS = """\
-AuraStream is a historical data API behind one endpoint: market data (crypto, equities, FX, futures),
-macro and energy (FRED, EIA, US Treasury, World Bank), positioning and flows (CFTC, FINRA short interest,
-SEC insider trades, UK/EU/US/Hong Kong trade) and crypto fundamentals and news (DefiLlama, GDELT).
+AuraStream is a historical data API behind one endpoint: market data (crypto exchanges and DEXs,
+equities, FX, futures, CFDs), crypto order book signals (Nemeton), macro and energy (FRED, EIA, US Treasury,
+World Bank, SDMX central bank series, Trading Economics, Nasdaq Data Link), positioning and flows (CFTC,
+FINRA short interest, SEC insider trades, UK/EU/US/Hong Kong trade), crypto fundamentals and news
+(DefiLlama, CoinGecko, GDELT) and historical weather (Open-Meteo, Visual Crossing).
 Call list_sources first if unsure which source covers something or how its tickers are written.
 Intervals: upper-case M is minutes, lower-case m is months (15M = 15 minutes, 1m = one month).
 Every get_timeseries/get_latest call counts against the user's monthly AuraStream allowance
@@ -77,9 +79,15 @@ def list_sources_text(env: Mapping[str, str] | None = None) -> str:
         "",
     ]
     for s in SOURCES.values():
-        if s.needs_credentials:
-            missing = [c.env for c in s.credentials if not env.get(c.env) and c.default is None]
+        if s.credentials_one_of:
+            either = " or ".join(c.env for c in s.credentials)
+            creds = "required, configured" if any(env.get(c.env) for c in s.credentials) \
+                else f"required, NOT configured (set {either})"
+        elif s.needs_credentials:
+            missing = [c.env for c in s.credentials if not c.optional and not env.get(c.env) and c.default is None]
             creds = "required, configured" if not missing else f"required, NOT configured (set {', '.join(missing)})"
+        elif s.credentials:
+            creds = f"not required (optional: {', '.join(c.env for c in s.credentials)})"
         else:
             creds = "not required"
         lines.append(f"- {s.name} ({s.label}): {s.asset_classes}")
@@ -118,26 +126,40 @@ async def run_timeseries(
     body = build_body(source, tickers, start, end, interval, dtype, **params)
     data = await fetch(body, api_key)
     head = f"source={body['source']} interval={interval} dtype={dtype} range={body['start']}..{body['end']}"
-    return head + "\n\n" + format_response(data, body["tickerlist"], max_rows, body["start"], body["end"])
+    keys = [location_key(t) if isinstance(t, dict) else t for t in body["tickerlist"]]
+    return head + "\n\n" + format_response(data, keys, max_rows, body["start"], body["end"])
 
 
 @mcp.tool(annotations=_READ_ONLY)
 async def get_timeseries(
     source: Annotated[SourceName, Field(description="Data source id, see list_sources.")],
-    tickers: Annotated[list[str], Field(description="Tickers in the source's own format, e.g. ['BTCUSDT'] for binance, ['EUR_USD'] for oanda, ['SPY'] for yahoo, ['GC'] for cftc, ['gold:CH'] for hmrc. Batch several tickers in one call.")],
+    tickers: Annotated[list[str], Field(description="Tickers in the source's own format, e.g. ['BTCUSDT'] for binance, ['EUR_USD'] for oanda, ['SPY'] for yahoo, ['GC'] for cftc, ['gold:CH'] for hmrc; weather sources take 'latitude,longitude', e.g. ['48.85,2.35']. Batch several tickers in one call.")],
     start: Annotated[str, Field(description="Start date, YYYY-MM-DD.")],
     end: Annotated[str, Field(description="End date, YYYY-MM-DD.")],
     interval: Annotated[Interval, Field(description="Bar size: upper-case M is minutes, lower-case m is months (15M = 15 minutes, 1m = one month). Support varies by source (list_sources shows each source's intervals).")] = "1d",
     dtype: Annotated[DType, Field(description="'bars' everywhere; binance also 'funding' (futures); oanda also 'orderbook'/'positionbook'; alpaca also 'trades'/'quotes'; yahoo also 'earnings'.")] = "bars",
-    price_type: Annotated[Literal["M", "A", "B"] | None, Field(description="oanda only: M mid (default), A ask, B bid.")] = None,
-    instrument: Annotated[Literal["spot", "futures", "stock", "etf", "fx", "index", "crypto", "options"] | None, Field(description="binance: spot (default) or futures (USD-M perpetuals). kraken: futures (default) or spot. firstrate: stock (default), etf, futures, fx, index, crypto or options.")] = None,
+    price_type: Annotated[Literal["M", "A", "B", "MID", "BID", "ASK"] | None, Field(description="oanda: M mid (default), A ask, B bid. cityindex: MID (default), BID or ASK.")] = None,
+    instrument: Annotated[Literal["spot", "futures", "stock", "etf", "fx", "index", "crypto", "options", "option", "perp"] | None, Field(description="binance: spot (default) or futures (USD-M perpetuals). kraken: futures (default) or spot. firstrate: stock (default), etf, futures, fx, index, crypto or options. lyra: option (default) or perp.")] = None,
     continuous_contracts: Annotated[bool | None, Field(description="firstrate futures only: true (default) for continuous series, false for one series per contract.")] = None,
     ticktype: Annotated[Literal["trade", "mark", "spot"] | None, Field(description="kraken futures only: trade (default), mark or spot (index) price.")] = None,
     assetclass: Annotated[Literal["equity", "crypto"] | None, Field(description="alpaca only.")] = None,
     category: Annotated[Literal["linear", "inverse"] | None, Field(description="bybit only: linear (default) or inverse.")] = None,
     feed: Annotated[Literal["iex", "sip"] | None, Field(description="alpaca stocks only: iex (default) or sip (consolidated tape).")] = None,
     adjustment: Annotated[Literal["raw", "split", "dividend", "all"] | None, Field(description="alpaca stock bars only: raw (default), split, dividend or all.")] = None,
-    indicator: Annotated[Literal["cpi", "gdp", "3mrate", "10yrate"] | None, Field(description="fred only: country shortcut; tickers are then 2-letter country codes (UK, not GB).")] = None,
+    indicator: Annotated[str | None, Field(description="fred: country shortcut cpi, gdp, 3mrate or 10yrate; tickers are then 2-letter country codes (UK, not GB). tradingeconomics (required): indicator name, e.g. 'gdp', 'inflation rate'.")] = None,
+    metric: Annotated[str | None, Field(description="nemeton (required): signal name, e.g. cumulative-depth, orderbook-pressure, spread (list_sources has all).")] = None,
+    level: Annotated[int | None, Field(description="nemeton only: order book depth the metric is computed over (default 1000).")] = None,
+    db: Annotated[str | None, Field(description="sdmx (required): provider ID, e.g. BIS, ECB, ESTAT, IMF, OECD.")] = None,
+    filters: Annotated[dict[str, dict[str, Any]] | None, Field(description='nasdaq only: column filters per table, e.g. {"QDL/FON": {"contract_code": "967654"}}.')] = None,
+    assetcol: Annotated[str | None, Field(description="nasdaq only: one series per value of this column, e.g. contract_code.")] = None,
+    index: Annotated[str | None, Field(description="nasdaq only: date column used as the index (default date).")] = None,
+    variables: Annotated[list[str] | None, Field(description="openmeteo (required): weather variables, e.g. ['temperature_2m'] with 1h, ['temperature_2m_max'] with 1d. visualcrossing: only these fields.")] = None,
+    timezone: Annotated[str | None, Field(description="openmeteo only: IANA time zone, e.g. Europe/Paris (default GMT).")] = None,
+    unit_group: Annotated[Literal["us", "metric", "uk", "base"] | None, Field(description="visualcrossing only: units (default us).")] = None,
+    vs_currency: Annotated[str | None, Field(description="coingecko only: quote currency (default USD).")] = None,
+    sessiontemplate: Annotated[str | None, Field(description="tradestation only: trading session, e.g. Default or USEQPreAndPost.")] = None,
+    closed_only: Annotated[bool | None, Field(description="tradestation only: leave out the bar still forming (default true).")] = None,
+    bartype: Annotated[Literal["bar", "tick"] | None, Field(description="cityindex only: bar (default) or tick.")] = None,
     dataset: Annotated[str | None, Field(description="finra: short_interest (default) or short_volume. edgar: insider (default) or financials. gdelt: themes.")] = None,
     report: Annotated[Literal["disaggregated", "tff", "legacy"] | None, Field(description="cftc only; default depends on the symbol.")] = None,
     options: Annotated[bool | None, Field(description="cftc only: include options (futures-equivalent).")] = None,
@@ -163,6 +185,9 @@ async def get_timeseries(
             category=category, feed=feed, adjustment=adjustment, indicator=indicator, dataset=dataset,
             report=report, options=options,
             as_of=as_of, concepts=concepts, period=period, mode=mode, reporter=reporter,
+            metric=metric, level=level, db=db, filters=filters, assetcol=assetcol, index=index,
+            variables=variables, timezone=timezone, unit_group=unit_group, vs_currency=vs_currency,
+            sessiontemplate=sessiontemplate, closed_only=closed_only, bartype=bartype,
         )
     except AuraStreamError as exc:
         raise ToolError(str(exc)) from None

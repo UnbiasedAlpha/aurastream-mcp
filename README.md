@@ -1,6 +1,6 @@
 # aurastream-mcp
 
-An [MCP](https://modelcontextprotocol.io) server for [AuraStream](https://aurastream.unbiased-alpha.com), the unified historical data API. It lets Claude Desktop, Claude Code, ChatGPT and other MCP clients pull OHLCV bars (and, for some sources, funding rates, trades, quotes, order books and earnings) from crypto exchanges, Yahoo Finance, Oanda, Alpaca, Polygon and others, plus macro, positioning and trade-flow data such as FRED, CFTC Commitments of Traders, FINRA short interest, SEC insider trades and UK/EU/US/Hong Kong metals trade, through one tool.
+An [MCP](https://modelcontextprotocol.io) server for [AuraStream](https://aurastream.unbiased-alpha.com), the unified historical data API. It lets Claude Desktop, Claude Code, ChatGPT and other MCP clients pull OHLCV bars (and, for some sources, funding rates, trades, quotes, order books and earnings) from crypto exchanges, Yahoo Finance, Oanda, Alpaca, Polygon and others, plus macro, positioning and trade-flow data such as FRED, CFTC Commitments of Traders, FINRA short interest, SEC insider trades and UK/EU/US/Hong Kong metals trade, and historical weather: all 37 AuraStream sources through one tool.
 
 Ask "plot BTC daily closes for Q1 from Binance", "compare SPY and QQQ drawdowns this year" or "how have hedge funds positioned in gold futures since 2020?" and the model calls AuraStream for the data.
 
@@ -9,7 +9,7 @@ Ask "plot BTC daily closes for Q1 from Binance", "compare SPY and QQQ drawdowns 
 | Tool | What it does |
 |---|---|
 | `list_sources()` | Sources, asset classes, ticker formats, intervals, supported dtypes and source-specific parameters, and whether provider credentials are needed and configured. No API call. |
-| `get_timeseries(source, tickers, start, end, interval="1d", dtype="bars", price_type=None, instrument=None, continuous_contracts=None, ticktype=None, assetclass=None, category=None, feed=None, adjustment=None, indicator=None, dataset=None, report=None, options=None, as_of=None, concepts=None, period=None, mode=None, reporter=None, max_rows=100)` | Calls `POST /timeseries`. Returns one CSV block per ticker (`timestamp,Open,High,Low,Close,Volume` for market bars, the source's own fields otherwise), capped at the most recent `max_rows` rows (max 1000) with the total row count noted. |
+| `get_timeseries(source, tickers, start, end, interval="1d", dtype="bars", price_type=None, instrument=None, continuous_contracts=None, ticktype=None, assetclass=None, category=None, feed=None, adjustment=None, indicator=None, dataset=None, report=None, options=None, as_of=None, concepts=None, period=None, mode=None, reporter=None, metric=None, level=None, db=None, filters=None, assetcol=None, index=None, variables=None, timezone=None, unit_group=None, vs_currency=None, sessiontemplate=None, closed_only=None, bartype=None, max_rows=100)` | Calls `POST /timeseries`. Returns one CSV block per ticker (`timestamp,Open,High,Low,Close,Volume` for market bars, the source's own fields otherwise), capped at the most recent `max_rows` rows (max 1000) with the total row count noted. |
 | `get_latest(source, tickers, interval="1d", bars=10)` | The most recent N bars per ticker, without picking dates. |
 
 Each `get_timeseries` / `get_latest` call is one AuraStream API call.
@@ -18,11 +18,13 @@ Sources exposed:
 
 | Group | Sources |
 |---|---|
-| Market data | `binance`, `bybit`, `kraken`, `yahoo`; with your own account: `oanda`, `alpaca`, `polygon`, `firstrate` |
-| Macro and energy | `treasury`, `worldbank`; with a free key: `fred`, `eia` |
+| Crypto | `binance`, `bybit`, `kraken`, `deribit`, `kucoin`, `dydx`, `hyperliquid`, `lyra` (Derive); with your own key: `coinapi`; with a [Nemeton](https://unbiased-alpha.com) subscription: `nemeton` (order book signals) |
+| Equities, FX, futures, CFDs | `yahoo`; with your own account: `oanda`, `alpaca`, `polygon`, `firstrate`, `tradestation`, `cityindex` |
+| Macro and energy | `treasury`, `worldbank`, `sdmx` (BIS, ECB, IMF, OECD...); with a free key: `fred`, `eia`; with your own key: `tradingeconomics`, `nasdaq` |
 | Fundamentals | `edgar` (insider trades, reported financials); with your own key: `finnhub` |
 | Positioning and flows | `cftc` (Commitments of Traders), `finra` (short interest), `hmrc`, `comext`, `hktrade`; with a free key: `uscensus` |
-| Crypto fundamentals and news | `defillama`, `gdelt` |
+| Crypto fundamentals and news | `defillama`, `gdelt`; with a free key: `coingecko` |
+| Weather | `openmeteo`; with your own key: `visualcrossing` |
 
 Dates are `YYYY-MM-DD`. Intervals follow the API: upper-case `M` is minutes, lower-case `m` is months (`15M` = 15 minutes, `1m` = one month). The server checks intervals, dtypes and parameters against each source's documented values before calling the API.
 
@@ -55,6 +57,17 @@ All secrets come from environment variables. Provider credentials are **never** 
 | `EIA_API_KEY` | `eia` (free at [eia.gov](https://www.eia.gov/opendata/register.php)) |
 | `CENSUS_API_KEY` | `uscensus` (free at [census.gov](https://api.census.gov/data/key_signup.html)) |
 | `EDGAR_USER_AGENT` | `edgar`: your name and contact email, e.g. `Your Company contact@yourcompany.com`. The SEC requires it; no registration. |
+| `NEMETON_API_KEY` | `nemeton`: the key from your Nemeton subscription |
+| `COINAPI_KEY` | `coinapi` |
+| `COINGECKO_API_KEY` or `COINGECKO_DEMO_API_KEY` | `coingecko`: a Pro key, or a free Demo key (last 365 days only) |
+| `NASDAQ_DATA_LINK_API_KEY` | `nasdaq` |
+| `TRADINGECONOMICS_API_KEY` | `tradingeconomics` |
+| `TRADESTATION_CLIENT_ID`, `TRADESTATION_CLIENT_SECRET`, `TRADESTATION_REFRESH_TOKEN` | `tradestation` |
+| `CITYINDEX_USERNAME`, `CITYINDEX_PASSWORD`, `CITYINDEX_APP_KEY` | `cityindex` |
+| `VISUALCROSSING_API_KEY` | `visualcrossing` |
+| `OPENMETEO_API_KEY` | `openmeteo`, optional: sent when set |
+
+Weather sources take locations as `latitude,longitude` tickers, e.g. `48.85,2.35`.
 
 Set only the ones you use. `list_sources` tells the model which sources are configured.
 

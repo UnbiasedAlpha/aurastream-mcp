@@ -348,3 +348,82 @@ async def test_get_latest_returns_requested_bars():
     assert sent["interval"] == "1d" and sent["source"] == "yahoo"
     data_lines = [line for line in text_of(result).splitlines() if line.startswith("2025-01-")]
     assert len(data_lines) == 3
+
+
+# --- sources added in 0.1.2 -------------------------------------------------
+
+def test_all_api_sources_are_exposed():
+    assert len(SOURCES) == 37
+    for name in ("deribit", "kucoin", "dydx", "hyperliquid", "lyra", "sdmx", "openmeteo"):
+        assert not SOURCES[name].needs_credentials
+
+
+def test_body_nemeton_nasdaq_sdmx(monkeypatch):
+    with pytest.raises(AuraStreamError, match="NEMETON_API_KEY"):
+        build_body("nemeton", ["BTCUSDT_BINANCE_PERPETUAL"], "2025-01-01", "2025-02-01", metric="spread")
+    monkeypatch.setenv("NEMETON_API_KEY", "nem")
+    body = build_body("nemeton", ["BTCUSDT_BINANCE_PERPETUAL"], "2025-01-01", "2025-02-01", "1h",
+                      metric="cumulative-depth", level=1)
+    assert body["credentials"] == {"key": "nem"} and body["metric"] == "cumulative-depth" and body["level"] == 1
+    with pytest.raises(AuraStreamError, match="whole number"):
+        build_body("nemeton", ["X"], "2025-01-01", "2025-02-01", metric="spread", level="1")
+    with pytest.raises(AuraStreamError, match="must be one of"):
+        build_body("nemeton", ["X"], "2025-01-01", "2025-02-01", metric="nope")
+
+    monkeypatch.setenv("NASDAQ_DATA_LINK_API_KEY", "ndl")
+    filters = {"QDL/FON": {"contract_code": "967654"}}
+    body = build_body("nasdaq", ["QDL/FON"], "2020-01-01", "2025-01-01", filters=filters, assetcol="contract_code")
+    assert body["filters"] == filters and body["credentials"] == {"key": "ndl"}
+    with pytest.raises(AuraStreamError, match="JSON object"):
+        build_body("nasdaq", ["QDL/FON"], "2020-01-01", "2025-01-01", filters="contract_code=1")
+
+    assert build_body("sdmx", ["BIS,WS_CBPOL,1.0/D.US"], "2020-01-01", "2025-01-01", db="BIS")["db"] == "BIS"
+
+
+def test_body_cityindex_price_type_and_coingecko_either_key(monkeypatch):
+    for var, value in (("CITYINDEX_USERNAME", "u"), ("CITYINDEX_PASSWORD", "p"), ("CITYINDEX_APP_KEY", "k")):
+        monkeypatch.setenv(var, value)
+    body = build_body("cityindex", ["401204130"], "2025-01-01", "2025-01-02", "1h", price_type="BID", bartype="tick")
+    assert body["dtype"] == "BID" and body["bartype"] == "tick" and "price_type" not in body
+    assert body["credentials"] == {"username": "u", "password": "p", "key": "k"}
+
+    with pytest.raises(AuraStreamError, match="COINGECKO_API_KEY or COINGECKO_DEMO_API_KEY"):
+        build_body("coingecko", ["bitcoin"], "2025-01-01", "2025-02-01")
+    monkeypatch.setenv("COINGECKO_DEMO_API_KEY", "demo")
+    assert build_body("coingecko", ["bitcoin"], "2025-01-01", "2025-02-01")["credentials"] == {"demo_key": "demo"}
+
+
+def test_body_weather_locations(monkeypatch):
+    body = build_body("openmeteo", ["48.85,2.35", " 40.71, -74.01 "], "2025-01-01", "2025-01-10", "1h",
+                      variables=["temperature_2m"])
+    assert body["tickerlist"] == [{"latitude": 48.85, "longitude": 2.35}, {"latitude": 40.71, "longitude": -74.01}]
+    assert "credentials" not in body
+    monkeypatch.setenv("OPENMETEO_API_KEY", "om")
+    assert build_body("openmeteo", ["48.85,2.35"], "2025-01-01", "2025-01-10", "1d")["credentials"] == {"key": "om"}
+    with pytest.raises(AuraStreamError, match="latitude,longitude"):
+        build_body("openmeteo", ["Paris"], "2025-01-01", "2025-01-10", "1d")
+    with pytest.raises(AuraStreamError, match="VISUALCROSSING_API_KEY"):
+        build_body("visualcrossing", ["47.37,8.54"], "2025-01-01", "2025-01-10", "1d")
+
+
+def test_list_sources_shows_optional_and_either_credentials():
+    text = list_sources_text(env={})
+    assert "not required (optional: OPENMETEO_API_KEY)" in text
+    assert "NOT configured (set COINGECKO_API_KEY or COINGECKO_DEMO_API_KEY)" in text
+
+
+@respx.mock
+async def test_get_timeseries_weather_matches_location_keys():
+    payload = {"48.85_2.35": {"2025-01-01 00:00:00": {"temperature_2m": 3.1}}}
+    route = respx.post(API_URL).mock(return_value=httpx.Response(200, json=payload))
+    async with Client(mcp) as client:
+        result = await client.call_tool(
+            "get_timeseries",
+            {"source": "openmeteo", "tickers": ["48.85,2.35"], "start": "2025-01-01", "end": "2025-01-02",
+             "interval": "1h", "variables": ["temperature_2m"], "timezone": "Europe/Paris"},
+        )
+    assert not result.is_error
+    sent = json.loads(route.calls.last.request.content)
+    assert sent["tickerlist"] == [{"latitude": 48.85, "longitude": 2.35}] and sent["timezone"] == "Europe/Paris"
+    out = text_of(result)
+    assert "timestamp,temperature_2m" in out and "Not in response" not in out
