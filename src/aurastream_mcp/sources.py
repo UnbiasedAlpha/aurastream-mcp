@@ -1,7 +1,8 @@
 """Static description of the AuraStream sources this server exposes.
 
-Derived from the live AuraStream docs (https://aurastream.unbiased-alpha.com/docs/,
-data-sources/*.md and getting-started/credentials.md). Credentials are never
+Derived from the AuraStream docs (https://aurastream.unbiased-alpha.com/docs/,
+data-sources/*.md and getting-started/credentials.md), checked against the
+backend library and the live API. Credentials are never
 taken from tool arguments; each source lists the environment variables they
 are read from and the field(s) in the request's ``credentials`` object they
 map to.
@@ -17,19 +18,10 @@ from dataclasses import dataclass, field
 
 @dataclass(frozen=True)
 class CredentialField:
-    # Names inside the request's "credentials" object. Usually one; see the
-    # note on _both below for why some carry two.
+    # Names inside the request's "credentials" object.
     fields: tuple[str, ...]
     env: str  # environment variable the value is read from
     default: str | None = None  # used when the env var is unset
-
-
-# The live docs name these fields api_key / secret_key, but the backend
-# library (aurastream/interfaces/*_interface.py) reads key / secret for these
-# older sources. Send the value under both names so the request works whichever
-# side gets fixed.
-def _both(docs_name: str, library_name: str, env: str) -> CredentialField:
-    return CredentialField((docs_name, library_name), env)
 
 
 @dataclass(frozen=True)
@@ -39,6 +31,8 @@ class Param:
     choices: tuple[str, ...] | None = None
     is_list: bool = False
     is_bool: bool = False
+    # Name in the request body when it differs from the tool argument.
+    api_name: str | None = None
 
 
 @dataclass(frozen=True)
@@ -51,6 +45,9 @@ class Source:
     # to the general list in the API reference.
     intervals: tuple[str, ...] | None = None
     dtypes: tuple[str, ...] = ("bars",)
+    # Request fields for each dtype, for sources that do not take a plain
+    # "dtype" field; None = send "dtype" when the source has more than one.
+    dtype_fields: dict[str, dict[str, str]] | None = None
     credentials: tuple[CredentialField, ...] = ()
     # Optional source-specific request parameters.
     params: dict[str, Param] = field(default_factory=dict)
@@ -65,7 +62,6 @@ class Source:
 # General interval list from api-reference/timeseries.md.
 GENERAL_INTERVALS = ("1s", "5s", "30s", "1M", "5M", "15M", "30M", "1h", "4h", "1d", "1w", "1m")
 
-_FREQUENCY = Param('"quarterly" (default) or "annual"', ("quarterly", "annual"))
 _TRADE_PRODUCTS = "gold (HS 7108), silver (7106), platinum_group (7110), copper_refined (7403), copper_ore (2603), aluminium (7601), nickel (7502), zinc (7901)"
 _MONTHLY_NOTE = "Monthly, stamped at the first day of the month; interval is always 1m."
 
@@ -76,11 +72,16 @@ SOURCES: dict[str, Source] = {
         Source(
             name="binance",
             label="Binance",
-            asset_classes="Crypto spot and perpetual futures, funding rates, order book",
-            ticker_format="Concatenated pairs, e.g. BTCUSDT, ETHUSDT, SOLUSDT",
-            intervals=("1M", "3M", "5M", "15M", "30M", "1h", "2h", "4h", "6h", "8h", "12h", "1d", "3d", "1w", "1m"),
-            dtypes=("bars", "funding", "orderbook"),
-            params={"instrument": Param('"spot" (default) or "perpetual"; dtype "funding" needs "perpetual"', ("spot", "perpetual"))},
+            asset_classes="Crypto spot and USD-M perpetual futures, funding rates",
+            ticker_format="Concatenated pairs, e.g. BTCUSDT, ETHUSDT, SOLUSDT (same symbols for spot and futures)",
+            intervals=("1M", "3M", "5M", "15M", "30M", "1h", "2h", "4h", "6h", "8h", "12h", "1d", "3d", "1w"),
+            dtypes=("bars", "funding"),
+            dtype_fields={"bars": {}, "funding": {"bars": "funding", "instrument": "futures"}},
+            params={"instrument": Param('"spot" (default) or "futures" (USD-M perpetuals); dtype "funding" is futures only',
+                                        ("spot", "futures"))},
+            fields="bars: Open, High, Low, Close, Volume, QuoteAssetVolume, NumberTrades, TakerBuyBaseVolume, "
+                   "TakerBuyQuoteVolume. funding: fundingRate",
+            notes="Bars are stamped at their close time. No monthly bars.",
         ),
         Source(
             name="bybit",
@@ -94,77 +95,104 @@ SOURCES: dict[str, Source] = {
             name="kraken",
             label="Kraken",
             asset_classes="Crypto spot and futures",
-            ticker_format="Spot: XXBTZUSD, XETHZUSD. Futures: PI_XBTUSD",
-            intervals=("1M", "5M", "15M", "30M", "1h", "4h", "1d", "1w"),
-            params={"instrument": Param('"futures" (default) or "spot"', ("spot", "futures"))},
-            notes="Max 720 bars per request for spot, 5000 for futures.",
+            ticker_format="Futures: PF_XBTUSD, PF_ETHUSD, PI_XBTUSD. Spot: XXBTZUSD, XETHZUSD",
+            intervals=("1M", "5M", "15M", "30M", "1h", "4h", "12h", "1d", "1w"),
+            params={
+                "instrument": Param('"futures" (default) or "spot"', ("spot", "futures")),
+                "ticktype": Param('futures only: "trade" (default), "mark" or "spot" (index) price', ("trade", "mark", "spot")),
+            },
+            notes="Spot returns only the latest 720 bars whatever the dates, and has no 12h; use futures for history.",
         ),
         Source(
             name="yahoo",
             label="Yahoo Finance",
             asset_classes="Equities, ETFs, indices, commodities, forex; earnings",
             ticker_format="AAPL, SPY, ^GSPC, ^DJI, GC=F, CL=F, EURUSD=X, DX-Y.NYB, BTC-USD",
-            intervals=("1M", "2M", "5M", "15M", "30M", "1h", "1d", "5d", "1w", "1m"),
+            intervals=("1M", "2M", "5M", "15M", "30M", "60M", "90M", "1h", "1d", "5d", "1w", "1m", "3m"),
             dtypes=("bars", "earnings"),
-            notes="Intraday intervals (below 1d) only cover the most recent 60 days.",
+            dtype_fields={"bars": {}, "earnings": {"dtype": "earnings"}},
+            fields="earnings: EPS Estimate, Reported EPS, Surprise(%)",
+            notes="1-minute bars cover the last 7 days, other intraday intervals the last 60 days.",
         ),
         Source(
             name="firstrate",
-            label="FirstRate",
-            asset_classes="Historical futures",
-            ticker_format="Futures root symbols",
-            notes="No docs page yet; ticker format and intervals are not documented.",
+            label="FirstRate Data",
+            asset_classes="Historical US stocks, ETFs, futures (continuous or by contract), FX, indices, crypto; option chains",
+            ticker_format="Stocks/ETFs: AAPL, SPY. Futures: root symbols, e.g. CL, GC, ZW. FX: EURUSD. Index: SPX. Crypto: BTC. Options: the underlying, e.g. SPY",
+            intervals=("1M", "5M", "30M", "1h", "1d"),
+            credentials=(CredentialField(("key",), "FIRSTRATE_USER_ID"),),
+            params={
+                "instrument": Param('"stock" (default), "etf", "futures", "fx", "index", "crypto" or "options"',
+                                    ("stock", "etf", "futures", "fx", "index", "crypto", "options")),
+                "continuous_contracts": Param("futures only: true (default) for continuous series, false for one series per contract",
+                                              is_bool=True),
+            },
+            notes="Needs your own FirstRate Data subscription; FIRSTRATE_USER_ID is the user ID FirstRate gives you for API "
+                  "downloads. Whole files are downloaded and trimmed to the dates, so large intraday requests are slow.",
         ),
         Source(
             name="oanda",
             label="Oanda",
             asset_classes="Forex, metals, CFDs, order book",
             ticker_format="Underscore pairs, e.g. EUR_USD, GBP_JPY, XAU_USD, XAG_USD",
-            intervals=("5s", "10s", "15s", "30s", "1M", "2M", "5M", "10M", "15M", "30M",
-                       "1h", "2h", "4h", "8h", "1d", "1w", "1m"),
-            dtypes=("bars", "orderbook"),
+            intervals=("1M", "2M", "4M", "5M", "10M", "15M", "30M",
+                       "1h", "2h", "3h", "4h", "6h", "8h", "12h", "1d", "1w", "1m"),
+            dtypes=("bars", "orderbook", "positionbook"),
             credentials=(
                 CredentialField(("id",), "OANDA_ACCOUNT_ID"),
                 CredentialField(("token",), "OANDA_TOKEN"),
                 CredentialField(("environment",), "OANDA_ENVIRONMENT", default="practice"),
             ),
-            params={"price_type": Param('"A" ask (default), "B" bid, "M" mid', ("A", "B", "M"))},
-            notes='OANDA_ENVIRONMENT is "practice" (default) or "live".',
+            params={"price_type": Param('"M" mid (default), "A" ask, "B" bid', ("M", "A", "B"))},
+            notes="Bars are stamped at their close; only completed bars. Order and position books are snapshots every "
+                  "20 minutes (interval ignored), for a subset of instruments. "
+                  'OANDA_ENVIRONMENT is "practice" (default) or "live".',
         ),
         Source(
             name="alpaca",
             label="Alpaca",
             asset_classes="US equities and crypto (bars, trades, quotes)",
             ticker_format="Equities: AAPL, SPY. Crypto: BTC/USD, ETH/USD",
-            intervals=("1M", "5M", "15M", "30M", "1h", "1d", "1w", "1m"),
+            intervals=("1M", "1h", "1d", "1w", "1m"),
             dtypes=("bars", "trades", "quotes"),
             credentials=(
-                _both("api_key", "key", "ALPACA_API_KEY"),
-                _both("secret_key", "secret", "ALPACA_SECRET_KEY"),
+                CredentialField(("key",), "ALPACA_API_KEY"),
+                CredentialField(("secret",), "ALPACA_SECRET_KEY"),
             ),
             params={
                 "assetclass": Param('"equity" (default) or "crypto"', ("equity", "crypto")),
-                "feed": Param('"iex" (default) or "sip" (SIP needs a paid Alpaca plan)', ("iex", "sip")),
+                "feed": Param('stocks: "iex" (default, IEX trades only) or "sip" (consolidated tape from 2016; '
+                              "history works on any account)", ("iex", "sip")),
+                "adjustment": Param('stock bars: "raw" (default), "split", "dividend" or "all"',
+                                    ("raw", "split", "dividend", "all")),
             },
-            notes="Trades and quotes are tick-level; keep the date range short.",
+            fields="bars: open, high, low, close, volume, trade_count, vwap",
+            notes="Single units only: the number in the interval is ignored (15M returns 1-minute bars). "
+                  "Trades and quotes are tick-level; keep the date range short.",
         ),
         Source(
             name="polygon",
             label="Polygon",
             asset_classes="US equities, options, forex, crypto",
-            ticker_format="AAPL, SPY; crypto with X: prefix, e.g. X:BTCUSD",
+            ticker_format="AAPL, SPY; prefixes X: crypto (X:BTCUSD), C: forex (C:EURUSD), O: options",
             intervals=("1s", "1M", "5M", "15M", "30M", "1h", "1d", "1w", "1m", "1q", "1y"),
-            credentials=(_both("api_key", "key", "POLYGON_API_KEY"),),
-            notes="Bars include VWAP and NTrades besides OHLCV.",
+            credentials=(CredentialField(("key",), "POLYGON_API_KEY"),),
+            notes="Bars are stamped at their open time (UTC) and include VWAP and NTrades besides OHLCV.",
         ),
         # --- macro and fundamentals ---------------------------------------------
         Source(
             name="fred",
             label="FRED",
             asset_classes="Economic indicators (CPI, GDP, interest rates)",
-            ticker_format="FRED series IDs (CPIAUCSL, GDPC1, UNRATE) or 2-letter country codes for CPI (US, GB, DE, JP)",
-            credentials=(_both("api_key", "key", "FRED_API_KEY"),),
-            params={"frequency": _FREQUENCY},
+            ticker_format="FRED series IDs (CPIAUCSL, GDPC1, UNRATE, DFF), or 2-letter country codes (US, UK, DE, JP) "
+                          "with indicator set",
+            credentials=(CredentialField(("key",), "FRED_API_KEY"),),
+            params={
+                "indicator": Param('country shortcut, tickers are then country codes (UK, not GB): "cpi", "gdp", '
+                                   '"3mrate" or "10yrate"', ("cpi", "gdp", "3mrate", "10yrate"), api_name="bars"),
+                "as_of": Param('"realtime_start" (default, rows stamped at publication) or "date" (period the value '
+                               "describes)", ("realtime_start", "date")),
+            },
             notes="Data comes at the series' native frequency; interval is accepted but does not resample.",
         ),
         Source(
@@ -172,8 +200,11 @@ SOURCES: dict[str, Source] = {
             label="Finnhub",
             asset_classes="Company basic financials (revenue, earnings, margins, ratios)",
             ticker_format="US symbols, e.g. AAPL, MSFT",
-            credentials=(_both("api_key", "key", "FINNHUB_API_KEY"),),
-            params={"frequency": _FREQUENCY},
+            intervals=("1q", "1y"),
+            credentials=(CredentialField(("key",), "FINNHUB_API_KEY"),),
+            fields="one field per Finnhub metric, e.g. eps, netMargin, currentRatio",
+            notes='interval "1y" gives annual figures, "1q" quarterly. The whole history is returned regardless of '
+                  "start and end.",
         ),
         Source(
             name="worldbank",
@@ -319,8 +350,9 @@ def intervals_for(source: str) -> tuple[str, ...]:
 
 
 # Every interval any source accepts, in a sensible order (used for the tool schema).
-_ORDER = ("1s", "5s", "10s", "15s", "30s", "1M", "2M", "3M", "5M", "10M", "15M", "30M",
-          "1h", "2h", "4h", "6h", "8h", "12h", "1d", "3d", "5d", "1w", "1m", "1q", "1y")
+_ORDER = ("1s", "5s", "10s", "15s", "30s", "1M", "2M", "3M", "4M", "5M", "10M", "15M", "30M", "60M", "90M",
+          "1h", "2h", "3h", "4h", "6h", "8h", "12h", "1d", "3d", "5d", "1w", "1m", "3m", "1q", "1y")
+assert _ORDER and all(set(s.intervals or ()) <= set(_ORDER) for s in SOURCES.values())
 _ALL = set(GENERAL_INTERVALS).union(*(s.intervals or () for s in SOURCES.values()))
 INTERVALS = tuple(i for i in _ORDER if i in _ALL)
 
