@@ -25,8 +25,8 @@ class AuraStreamError(Exception):
 def credentials_from_env(source: str, env: Mapping[str, str] | None = None) -> dict[str, str] | None:
     """Build the ``credentials`` object for ``source`` from environment variables.
 
-    Returns None for public sources. Raises AuraStreamError naming the missing
-    variables if a credentialed source is not configured.
+    Returns None for public sources (optional fields are sent when set). Raises
+    AuraStreamError naming the missing variables if a credentialed source is not configured.
     """
     env = os.environ if env is None else env
     spec = SOURCES[source]
@@ -39,15 +39,33 @@ def credentials_from_env(source: str, env: Mapping[str, str] | None = None) -> d
         if value:
             for name in cf.fields:
                 creds[name] = value
-        else:
+        elif not cf.optional:
             missing.append(cf.env)
+    if spec.credentials_one_of and not creds:
+        missing = [" or ".join(c.env for c in spec.credentials)]
     if missing:
         raise AuraStreamError(
             f"Source '{source}' needs your own {spec.label} credentials, which are not configured. "
             f"Set {', '.join(missing)} in the MCP server's environment (e.g. the 'env' block of the "
             "client config) and restart it. Credentials are never accepted as tool arguments."
         )
-    return creds
+    return creds or None
+
+
+def parse_location(ticker: str) -> dict[str, float]:
+    """'48.85,2.35' -> {"latitude": 48.85, "longitude": 2.35} (weather sources)."""
+    try:
+        lat, lon = (float(x) for x in ticker.split(","))
+    except ValueError:
+        raise AuraStreamError(f"Locations are written 'latitude,longitude', e.g. '48.85,2.35'; got '{ticker}'.") from None
+    if not (-90 <= lat <= 90 and -180 <= lon <= 180):
+        raise AuraStreamError(f"Location '{ticker}' is out of range (latitude -90..90, longitude -180..180).")
+    return {"latitude": lat, "longitude": lon}
+
+
+def location_key(location: dict[str, float]) -> str:
+    """How the API keys a location's result, e.g. '48.85_2.35'."""
+    return f"{location['latitude']}_{location['longitude']}"
 
 
 def build_body(
@@ -91,6 +109,12 @@ def build_body(
         if param.is_bool:
             if not isinstance(value, bool):
                 raise AuraStreamError(f"{name} for '{source}' must be true or false; got '{value}'.")
+        elif param.is_int:
+            if isinstance(value, bool) or not isinstance(value, int):
+                raise AuraStreamError(f"{name} for '{source}' must be a whole number; got '{value}'.")
+        elif param.is_dict:
+            if not isinstance(value, dict):
+                raise AuraStreamError(f"{name} for '{source}' must be a JSON object.")
         elif param.is_list:
             if not isinstance(value, list) or not all(isinstance(v, str) and v.strip() for v in value):
                 raise AuraStreamError(f"{name} for '{source}' must be a list of names.")
@@ -102,8 +126,12 @@ def build_body(
         if param.api_name:
             extras[param.api_name] = extras.pop(name)
 
+    tickerlist: list[Any] = tickers
+    if spec.ticker_kind == "latlon":
+        tickerlist = [parse_location(t) for t in tickers]
+
     body: dict[str, Any] = {
-        "tickerlist": tickers,
+        "tickerlist": tickerlist,
         "start": start.strip(),
         "end": end.strip(),
         "interval": interval,
