@@ -9,7 +9,7 @@ Ask "plot BTC daily closes for Q1 from Binance", "compare SPY and QQQ drawdowns 
 | Tool | What it does |
 |---|---|
 | `list_sources()` | Sources, asset classes, ticker formats, intervals, supported dtypes and source-specific parameters, and whether provider credentials are needed and configured. No API call. |
-| `get_timeseries(source, tickers, start, end, interval="1d", dtype="bars", price_type=None, instrument=None, ticktype=None, assetclass=None, category=None, feed=None, adjustment=None, indicator=None, dataset=None, report=None, options=None, as_of=None, concepts=None, period=None, mode=None, reporter=None, max_rows=100)` | Calls `POST /timeseries`. Returns one CSV block per ticker (`timestamp,Open,High,Low,Close,Volume` for market bars, the source's own fields otherwise), capped at the most recent `max_rows` rows (max 1000) with the total row count noted. |
+| `get_timeseries(source, tickers, start, end, interval="1d", dtype="bars", price_type=None, instrument=None, continuous_contracts=None, ticktype=None, assetclass=None, category=None, feed=None, adjustment=None, indicator=None, dataset=None, report=None, options=None, as_of=None, concepts=None, period=None, mode=None, reporter=None, max_rows=100)` | Calls `POST /timeseries`. Returns one CSV block per ticker (`timestamp,Open,High,Low,Close,Volume` for market bars, the source's own fields otherwise), capped at the most recent `max_rows` rows (max 1000) with the total row count noted. |
 | `get_latest(source, tickers, interval="1d", bars=10)` | The most recent N bars per ticker, without picking dates. |
 
 Each `get_timeseries` / `get_latest` call is one AuraStream API call.
@@ -18,7 +18,7 @@ Sources exposed:
 
 | Group | Sources |
 |---|---|
-| Market data | `binance`, `bybit`, `kraken`, `yahoo`; with your own account: `oanda`, `alpaca`, `polygon` |
+| Market data | `binance`, `bybit`, `kraken`, `yahoo`; with your own account: `oanda`, `alpaca`, `polygon`, `firstrate` |
 | Macro and energy | `treasury`, `worldbank`; with a free key: `fred`, `eia` |
 | Fundamentals | `edgar` (insider trades, reported financials); with your own key: `finnhub` |
 | Positioning and flows | `cftc` (Commitments of Traders), `finra` (short interest), `hmrc`, `comext`, `hktrade`; with a free key: `uscensus` |
@@ -51,6 +51,7 @@ All secrets come from environment variables. Provider credentials are **never** 
 | `POLYGON_API_KEY` | `polygon` |
 | `FRED_API_KEY` | `fred` |
 | `FINNHUB_API_KEY` | `finnhub` |
+| `FIRSTRATE_USER_ID` | `firstrate`: the user ID FirstRate Data gives you for API downloads |
 | `EIA_API_KEY` | `eia` (free at [eia.gov](https://www.eia.gov/opendata/register.php)) |
 | `CENSUS_API_KEY` | `uscensus` (free at [census.gov](https://api.census.gov/data/key_signup.html)) |
 | `EDGAR_USER_AGENT` | `edgar`: your name and contact email, e.g. `Your Company contact@yourcompany.com`. The SEC requires it; no registration. |

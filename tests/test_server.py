@@ -125,6 +125,15 @@ def test_body_new_credentialed_sources(monkeypatch):
     assert edgar["concepts"] == ["Revenues", "NetIncomeLoss"] and edgar["period"] == "annual"
 
 
+def test_body_firstrate(monkeypatch):
+    with pytest.raises(AuraStreamError, match="FIRSTRATE_USER_ID"):
+        build_body("firstrate", ["CL"], "2025-01-01", "2025-02-01")
+    monkeypatch.setenv("FIRSTRATE_USER_ID", "fr-user")
+    body = build_body("firstrate", ["CL"], "2025-01-01", "2025-02-01", "1h", instrument="futures", continuous_contracts=False)
+    assert body["credentials"] == {"key": "fr-user"}
+    assert body["instrument"] == "futures" and body["continuous_contracts"] is False
+
+
 def test_missing_credentials_names_env_vars():
     with pytest.raises(AuraStreamError, match="POLYGON_API_KEY"):
         credentials_from_env("polygon")
@@ -148,7 +157,8 @@ def test_missing_credentials_names_env_vars():
         ({"source": "binance", "tickers": ["BTCUSDT"], "dtype": "orderbook"}, "supports dtype"),
         ({"source": "binance", "tickers": ["BTCUSDT"], "indicator": "cpi"}, "does not apply"),
         ({"source": "fred", "tickers": ["UK"], "indicator": "cpi", "as_of": "release"}, "as_of for 'fred' must be"),
-        ({"source": "firstrate", "tickers": ["ES"]}, "Unknown source"),
+        ({"source": "firstrate", "tickers": ["CL"], "instrument": "spot"}, "instrument for 'firstrate' must be"),
+        ({"source": "binance", "tickers": ["BTCUSDT"], "instrument": "stock"}, "instrument for 'binance' must be"),
         ({"dtype": "trades"}, "supports dtype"),
         ({"price_type": "M"}, "does not apply"),
         ({"tickers": [" "]}, "at least one ticker"),

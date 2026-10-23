@@ -115,6 +115,22 @@ SOURCES: dict[str, Source] = {
             notes="1-minute bars cover the last 7 days, other intraday intervals the last 60 days.",
         ),
         Source(
+            name="firstrate",
+            label="FirstRate Data",
+            asset_classes="Historical US stocks, ETFs, futures (continuous or by contract), FX, indices, crypto; option chains",
+            ticker_format="Stocks/ETFs: AAPL, SPY. Futures: root symbols, e.g. CL, GC, ZW. FX: EURUSD. Index: SPX. Crypto: BTC. Options: the underlying, e.g. SPY",
+            intervals=("1M", "5M", "30M", "1h", "1d"),
+            credentials=(CredentialField(("key",), "FIRSTRATE_USER_ID"),),
+            params={
+                "instrument": Param('"stock" (default), "etf", "futures", "fx", "index", "crypto" or "options"',
+                                    ("stock", "etf", "futures", "fx", "index", "crypto", "options")),
+                "continuous_contracts": Param("futures only: true (default) for continuous series, false for one series per contract",
+                                              is_bool=True),
+            },
+            notes="Needs your own FirstRate Data subscription; FIRSTRATE_USER_ID is the user ID FirstRate gives you for API "
+                  "downloads. Whole files are downloaded and trimmed to the dates, so large intraday requests are slow.",
+        ),
+        Source(
             name="oanda",
             label="Oanda",
             asset_classes="Forex, metals, CFDs, order book",
