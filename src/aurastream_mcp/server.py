@@ -160,7 +160,7 @@ async def get_timeseries(
     sessiontemplate: Annotated[str | None, Field(description="tradestation only: trading session, e.g. Default or USEQPreAndPost.")] = None,
     closed_only: Annotated[bool | None, Field(description="tradestation only: leave out the bar still forming (default true).")] = None,
     bartype: Annotated[Literal["bar", "tick"] | None, Field(description="cityindex only: bar (default) or tick.")] = None,
-    dataset: Annotated[str | None, Field(description="edgar: insider (default), financials, earnings, ftd or 13f. gdelt: themes.")] = None,
+    dataset: Annotated[str | None, Field(description="edgar: insider (default), financials, earnings, ftd or 13f. uscensus: trade (default) or retail. gdelt: themes.")] = None,
     report: Annotated[Literal["disaggregated", "tff", "legacy"] | None, Field(description="cftc only; default depends on the symbol.")] = None,
     options: Annotated[bool | None, Field(description="cftc only: include options (futures-equivalent).")] = None,
     as_of: Annotated[Literal["release", "report", "realtime_start", "date"] | None, Field(description="cftc: release (default, stamped at Friday publication, no look-ahead) or report (Tuesday position date). fred: realtime_start (default, stamped at publication) or date (period described).")] = None,
@@ -168,6 +168,8 @@ async def get_timeseries(
     period: Annotated[Literal["quarter", "annual"] | None, Field(description="edgar financials only: quarter (default) or annual.")] = None,
     mode: Annotated[Literal["timelinevol", "timelinevolraw", "timelinetone"] | None, Field(description="gdelt search queries only: share of coverage (default), article count, or tone.")] = None,
     reporter: Annotated[str | None, Field(description="comext only: EU27_2020 (default) or a member state, e.g. DE.")] = None,
+    adjusted: Annotated[bool | None, Field(description="uscensus retail only: seasonally adjusted (default true).")] = None,
+    frequency: Annotated[Literal["M", "Q", "A"] | None, Field(description="bea only: M, Q or A (default: the series' own).")] = None,
     max_rows: Annotated[int, Field(ge=1, le=HARD_MAX_ROWS, description="Max rows returned per ticker; the most recent rows are kept.")] = DEFAULT_MAX_ROWS,
     ctx: Context | None = None,
 ) -> str:
@@ -188,6 +190,7 @@ async def get_timeseries(
             metric=metric, level=level, db=db, filters=filters, assetcol=assetcol, index=index,
             variables=variables, timezone=timezone, unit_group=unit_group, vs_currency=vs_currency,
             sessiontemplate=sessiontemplate, closed_only=closed_only, bartype=bartype,
+            adjusted=adjusted, frequency=frequency,
         )
     except AuraStreamError as exc:
         raise ToolError(str(exc)) from None

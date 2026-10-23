@@ -404,6 +404,18 @@ SOURCES: dict[str, Source] = {
                   "Schedules only, no released values. Coverage: bls current and next year, bea upcoming, census from 2025, fomc from 2021.",
         ),
         Source(
+            name="bea",
+            label="BEA National Accounts",
+            asset_classes="US consumer spending (PCE), PCE inflation, personal income and saving, GDP",
+            ticker_format="pce, pce_goods, pce_durables, pce_nondurables, pce_services, pce_real, pce_price, core_pce_price, "
+                          "personal_income, disposable_income, saving_rate, gdp, gdp_real_growth, or a NIPA table line <table>:<line> (T20805:3)",
+            intervals=("1m", "3m", "1y"),
+            credentials=(CredentialField(("api_key",), "BEA_API_KEY"),),
+            params={"frequency": Param('"M", "Q" or "A"; default is the series\' own (GDP quarterly)', ("M", "Q", "A"))},
+            fields="value (as published), unit, unit_mult (6 = millions of dollars), line",
+            notes=_MONTHLY_NOTE + " PCE is published at the end of the following month; latest revised values. Free key at apps.bea.gov/API/signup.",
+        ),
+        Source(
             name="tradingeconomics",
             label="Trading Economics",
             asset_classes="Economic indicators by country",
@@ -475,14 +487,21 @@ SOURCES: dict[str, Source] = {
         ),
         Source(
             name="uscensus",
-            label="US Trade (Census)",
-            asset_classes="US imports and exports by product and country",
-            ticker_format="<product> or <product>:<partner>, e.g. gold, gold:SWITZERLAND. product: HS code (2, 4, 6 or 10 digits) or the same names as hmrc. "
-                          "partner: Census country code (4419) or country name in capitals",
+            label="US Census (Trade, Retail Sales)",
+            asset_classes="US imports and exports by product and country; monthly retail and food services sales",
+            ticker_format="trade: <product> or <product>:<partner>, e.g. gold, gold:SWITZERLAND. product: HS code (2, 4, 6 or 10 digits) or the same names as hmrc; "
+                          "partner: Census country code (4419) or country name in capitals. retail: total, ex_autos, ex_gas, ex_autos_gas, retail, "
+                          "nonstore, food_services, autos, grocery, gasoline, clothing, general_merchandise, ... or a Census category code (4451)",
             intervals=("1m",),
             credentials=(CredentialField(("api_key",), "CENSUS_API_KEY"),),
-            fields="import_value_usd, export_value_usd; import_quantity, export_quantity for 10-digit codes",
-            notes=_MONTHLY_NOTE + " Published about five weeks after the month ends. Free key at api.census.gov.",
+            params={
+                "dataset": Param('"trade" (default) or "retail"', ("trade", "retail")),
+                "adjusted": Param("retail only: seasonally adjusted (default true)", is_bool=True),
+            },
+            fields="trade: import_value_usd, export_value_usd; import_quantity, export_quantity for 10-digit codes. "
+                   "retail: sales_musd, change_pct, sales_cv_pct, change_se",
+            notes=_MONTHLY_NOTE + " Trade is published about five weeks after the month ends, retail about two weeks after "
+                  "(latest revised values, from 1992). Free key at api.census.gov.",
         ),
         Source(
             name="hktrade",
