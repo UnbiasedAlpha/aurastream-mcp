@@ -8,7 +8,9 @@ version = "0.1.0"
 description = "MCP server for AuraStream: historical market data for Claude, ChatGPT and other MCP clients."
 readme = "README.md"
 requires-python = ">=3.10"
-authors = [{ name = "Unbiased Alpha", email = "marco.santanche@unbiased-alpha.com" }]
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Unbiased Alpha" }]
 keywords = ["mcp", "market data", "aurastream", "claude", "trading"]
 dependencies = [
     "mcp>=2.3,<3",
@@ -24,6 +26,7 @@ aurastream-mcp = "aurastream_mcp.server:main"
 [project.urls]
 Homepage = "https://aurastream.unbiased-alpha.com"
 Documentation = "https://aurastream.unbiased-alpha.com/docs/"
+Source = "https://github.com/UnbiasedAlpha/aurastream-mcp"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/aurastream_mcp"]

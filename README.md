@@ -1,31 +1,40 @@
 # aurastream-mcp
 
-An [MCP](https://modelcontextprotocol.io) server for [AuraStream](https://aurastream.unbiased-alpha.com), the unified historical market data API. It lets Claude Desktop, Claude Code, ChatGPT and other MCP clients pull OHLCV bars (and, for some sources, funding rates, trades, quotes, order books and earnings) from crypto exchanges, Yahoo Finance, Oanda, Alpaca, Polygon, FRED and others, through one tool.
+An [MCP](https://modelcontextprotocol.io) server for [AuraStream](https://aurastream.unbiased-alpha.com), the unified historical data API. It lets Claude Desktop, Claude Code, ChatGPT and other MCP clients pull OHLCV bars (and, for some sources, funding rates, trades, quotes, order books and earnings) from crypto exchanges, Yahoo Finance, Oanda, Alpaca, Polygon and others, plus macro, positioning and trade-flow data such as FRED, CFTC Commitments of Traders, FINRA short interest, SEC insider trades and UK/EU/US/Hong Kong metals trade, through one tool.
 
-Ask "plot BTC daily closes for Q1 from Binance" or "compare SPY and QQQ drawdowns this year" and the model calls AuraStream for the data.
+Ask "plot BTC daily closes for Q1 from Binance", "compare SPY and QQQ drawdowns this year" or "how have hedge funds positioned in gold futures since 2020?" and the model calls AuraStream for the data.
 
 ## Tools
 
 | Tool | What it does |
 |---|---|
 | `list_sources()` | Sources, asset classes, ticker formats, intervals, supported dtypes and source-specific parameters, and whether provider credentials are needed and configured. No API call. |
-| `get_timeseries(source, tickers, start, end, interval="1d", dtype="bars", price_type=None, instrument=None, assetclass=None, category=None, feed=None, frequency=None, max_rows=100)` | Calls `POST /timeseries`. Returns one CSV block per ticker (`timestamp,Open,High,Low,Close,Volume` for bars), capped at the most recent `max_rows` rows (max 1000) with the total row count noted. |
+| `get_timeseries(source, tickers, start, end, interval="1d", dtype="bars", price_type=None, instrument=None, assetclass=None, category=None, feed=None, frequency=None, dataset=None, report=None, options=None, as_of=None, concepts=None, period=None, mode=None, reporter=None, max_rows=100)` | Calls `POST /timeseries`. Returns one CSV block per ticker (`timestamp,Open,High,Low,Close,Volume` for market bars, the source's own fields otherwise), capped at the most recent `max_rows` rows (max 1000) with the total row count noted. |
 | `get_latest(source, tickers, interval="1d", bars=10)` | The most recent N bars per ticker, without picking dates. |
 
 Each `get_timeseries` / `get_latest` call is one AuraStream API call.
 
-Sources exposed: `binance`, `bybit`, `kraken`, `yahoo`, `firstrate` (no provider credentials) and `oanda`, `alpaca`, `polygon`, `fred`, `finnhub` (your own provider credentials). Dates are `YYYY-MM-DD`; the server checks intervals, dtypes and parameters against each source's documented values before calling the API.
+Sources exposed:
+
+| Group | Sources |
+|---|---|
+| Market data | `binance`, `bybit`, `kraken`, `yahoo`, `firstrate`; with your own account: `oanda`, `alpaca`, `polygon` |
+| Macro and energy | `treasury`, `worldbank`; with a free key: `fred`, `eia` |
+| Fundamentals | `edgar` (insider trades, reported financials); with your own key: `finnhub` |
+| Positioning and flows | `cftc` (Commitments of Traders), `finra` (short interest), `hmrc`, `comext`, `hktrade`; with a free key: `uscensus` |
+| Crypto fundamentals and news | `defillama`, `gdelt` |
+
+Dates are `YYYY-MM-DD`. Intervals follow the API: upper-case `M` is minutes, lower-case `m` is months (`15M` = 15 minutes, `1m` = one month). The server checks intervals, dtypes and parameters against each source's documented values before calling the API.
 
 ## Install
 
 Requires Python 3.10+.
 
 ```bash
-# from a local checkout, for now
-pip install /path/to/aurastream-mcp
+pip install "git+https://github.com/UnbiasedAlpha/aurastream-mcp"
 ```
 
-A PyPI release (`pip install aurastream-mcp` / `uvx aurastream-mcp`) is planned; the snippets below will work unchanged once it exists.
+A PyPI release (`pip install aurastream-mcp` / `uvx aurastream-mcp`) is planned; the snippets below work the same either way.
 
 This installs an `aurastream-mcp` command. Check it with `aurastream-mcp --help`.
 
@@ -42,6 +51,9 @@ All secrets come from environment variables. Provider credentials are **never** 
 | `POLYGON_API_KEY` | `polygon` |
 | `FRED_API_KEY` | `fred` |
 | `FINNHUB_API_KEY` | `finnhub` |
+| `EIA_API_KEY` | `eia` (free at [eia.gov](https://www.eia.gov/opendata/register.php)) |
+| `CENSUS_API_KEY` | `uscensus` (free at [census.gov](https://api.census.gov/data/key_signup.html)) |
+| `EDGAR_USER_AGENT` | `edgar`: your name and contact email, e.g. `Your Company contact@yourcompany.com`. The SEC requires it; no registration. |
 
 Set only the ones you use. `list_sources` tells the model which sources are configured.
 
@@ -109,6 +121,9 @@ aurastream-mcp [--http] [--host HOST] [--port PORT] [--path /mcp]
 - "Show the last 20 hourly bars of EUR_USD from Oanda."
 - "Pull UNRATE and DFF from FRED since 2015 and describe how they moved together."
 - "Show Binance BTCUSDT perpetual funding rates for June 2025."
+- "How has managed-money positioning in gold futures (CFTC) changed since 2020?"
+- "Which AAPL insiders bought or sold shares in 2024?"
+- "Show monthly UK gold exports to Switzerland since 2020."
 - "Fetch SPY and QQQ daily from Yahoo for the last 6 months and compare max drawdowns."
 
 ## Limits
@@ -123,7 +138,9 @@ aurastream-mcp [--http] [--host HOST] [--port PORT] [--path /mcp]
 
 - **Credential field names.** The API docs name the provider credential fields `api_key` (Polygon, FRED, Finnhub) and `api_key` / `secret_key` (Alpaca), while the AuraStream backend library reads `key` (and `secret` for Alpaca). Until that is settled, the server sends each value under both names, e.g. `{"api_key": k, "key": k}`. This has not been tested against the live API yet.
 - **FirstRate** has no docs page; its ticker format and intervals are not documented, so the server only applies the general interval list.
-- Non-bar data (funding, order book, trades, quotes, earnings, Finnhub financials) is rendered generically as a table and has not been checked against live responses.
+- Non-bar data (funding, order book, trades, quotes, earnings, Finnhub financials and the macro, positioning and trade sources) is rendered generically as a table and has not been checked against live responses.
+- Several sources are stamped at the period they describe but published later (EIA, FINRA short interest, the trade sources). `list_sources` notes the lag; shift the data before backtesting.
+- GDELT search queries are throttled by GDELT itself; keep ranges short. `dataset="themes"` is not throttled.
 
 ## Development
 
@@ -135,3 +152,7 @@ pytest
 ```
 
 The tests mock all HTTP calls; no API key is needed.
+
+## License
+
+MIT. See [LICENSE](LICENSE).

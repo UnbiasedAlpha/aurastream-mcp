@@ -57,15 +57,14 @@ def build_body(
     end: str,
     interval: str = "1d",
     dtype: str = "bars",
-    price_type: str | None = None,
-    instrument: str | None = None,
-    assetclass: str | None = None,
-    category: str | None = None,
-    feed: str | None = None,
-    frequency: str | None = None,
     env: Mapping[str, str] | None = None,
+    **params: Any,
 ) -> dict[str, Any]:
-    """Validate the arguments and build the JSON request body."""
+    """Validate the arguments and build the JSON request body.
+
+    ``params`` are source-specific request parameters (price_type, instrument,
+    dataset, ...); None values are ignored.
+    """
     source = source.strip().lower()
     if source not in SOURCES:
         raise AuraStreamError(f"Unknown source '{source}'. Available: {', '.join(SOURCES)}. Call list_sources for details.")
@@ -84,28 +83,22 @@ def build_body(
     if dtype not in spec.dtypes:
         raise AuraStreamError(f"Source '{source}' supports dtype {', '.join(spec.dtypes)}; got '{dtype}'.")
 
-    extras = {
-        "price_type": price_type,
-        "instrument": instrument,
-        "assetclass": assetclass,
-        "category": category,
-        "feed": feed,
-        "frequency": frequency,
-    }
+    extras = {name: value for name, value in params.items() if value is not None}
     for name, value in extras.items():
-        if value is not None and name not in spec.params:
+        param = spec.params.get(name)
+        if param is None:
             raise AuraStreamError(f"Parameter '{name}' does not apply to source '{source}'.")
-    allowed = {
-        "price_type": ("A", "B", "M"),
-        "instrument": {"binance": ("spot", "perpetual"), "kraken": ("spot", "futures")}.get(source, ()),
-        "assetclass": ("equity", "crypto"),
-        "category": ("linear", "inverse"),
-        "feed": ("iex", "sip"),
-        "frequency": ("quarterly", "annual"),
-    }
-    for name, value in extras.items():
-        if value is not None and value not in allowed[name]:
-            raise AuraStreamError(f"{name} for '{source}' must be one of {', '.join(allowed[name])}; got '{value}'.")
+        if param.is_bool:
+            if not isinstance(value, bool):
+                raise AuraStreamError(f"{name} for '{source}' must be true or false; got '{value}'.")
+        elif param.is_list:
+            if not isinstance(value, list) or not all(isinstance(v, str) and v.strip() for v in value):
+                raise AuraStreamError(f"{name} for '{source}' must be a list of names.")
+            extras[name] = [v.strip() for v in value]
+        elif param.choices is not None and value not in param.choices:
+            raise AuraStreamError(f"{name} for '{source}' must be one of {', '.join(param.choices)}; got '{value}'.")
+        elif param.choices is None and not (isinstance(value, str) and value.strip()):
+            raise AuraStreamError(f"{name} for '{source}' must be a non-empty string.")
 
     body: dict[str, Any] = {
         "tickerlist": tickers,
@@ -117,7 +110,7 @@ def build_body(
     # Only send dtype where the source has more than one; matches the docs examples.
     if len(spec.dtypes) > 1:
         body["dtype"] = dtype
-    body.update({k: v for k, v in extras.items() if v is not None})
+    body.update(extras)
     creds = credentials_from_env(source, env)
     if creds:
         body["credentials"] = creds

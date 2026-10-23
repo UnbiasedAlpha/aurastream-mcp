@@ -7,7 +7,7 @@ import math
 import os
 from collections.abc import Mapping
 from datetime import datetime, timedelta, timezone
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 
 from mcp.server.mcpserver import Context, MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
@@ -20,8 +20,11 @@ from .formatting import DEFAULT_MAX_ROWS, HARD_MAX_ROWS, format_response
 from .sources import DTYPES, INTERVALS, SOURCES, intervals_for
 
 INSTRUCTIONS = """\
-AuraStream is a historical market data API (crypto, equities, FX, futures, macro) behind one endpoint.
-Call list_sources first if unsure which source covers an instrument or how its tickers are written.
+AuraStream is a historical data API behind one endpoint: market data (crypto, equities, FX, futures),
+macro and energy (FRED, EIA, US Treasury, World Bank), positioning and flows (CFTC, FINRA short interest,
+SEC insider trades, UK/EU/US/Hong Kong trade) and crypto fundamentals and news (DefiLlama, GDELT).
+Call list_sources first if unsure which source covers something or how its tickers are written.
+Intervals: upper-case M is minutes, lower-case m is months (15M = 15 minutes, 1m = one month).
 Every get_timeseries/get_latest call counts against the user's monthly AuraStream allowance
 (free plan: 500 calls), so fetch several tickers in one call and avoid repeating identical calls.
 Data is historical, not a real-time feed."""
@@ -83,8 +86,10 @@ def list_sources_text(env: Mapping[str, str] | None = None) -> str:
         lines.append(f"  tickers: {s.ticker_format}")
         lines.append(f"  intervals: {', '.join(intervals_for(s.name))}")
         lines.append(f"  dtypes: {', '.join(s.dtypes)}; credentials: {creds}")
-        for name, desc in s.params.items():
-            lines.append(f"  param {name}: {desc}")
+        for name, param in s.params.items():
+            lines.append(f"  param {name}: {param.description}")
+        if s.fields:
+            lines.append(f"  fields: {s.fields}")
         if s.notes:
             lines.append(f"  note: {s.notes}")
     return "\n".join(lines)
@@ -92,9 +97,9 @@ def list_sources_text(env: Mapping[str, str] | None = None) -> str:
 
 @mcp.tool(annotations=_READ_ONLY)
 def list_sources() -> str:
-    """List the AuraStream data sources: asset classes, ticker format, intervals, supported dtypes,
-    optional source-specific parameters, and whether provider credentials are needed and
-    configured. Free to call (does not use the API allowance)."""
+    """List the AuraStream data sources: what each covers, ticker format, intervals, supported dtypes,
+    optional source-specific parameters, the fields returned when they are not OHLCV, and whether
+    provider credentials are needed and configured. Free to call (does not use the API allowance)."""
     return list_sources_text()
 
 
@@ -106,19 +111,11 @@ async def run_timeseries(
     end: str,
     interval: str = "1d",
     dtype: str = "bars",
-    price_type: str | None = None,
-    instrument: str | None = None,
-    assetclass: str | None = None,
-    category: str | None = None,
-    feed: str | None = None,
-    frequency: str | None = None,
     max_rows: int = DEFAULT_MAX_ROWS,
     api_key: str | None,
+    **params: Any,
 ) -> str:
-    body = build_body(
-        source, tickers, start, end, interval, dtype, price_type,
-        instrument, assetclass, category, feed, frequency,
-    )
+    body = build_body(source, tickers, start, end, interval, dtype, **params)
     data = await fetch(body, api_key)
     head = f"source={body['source']} interval={interval} dtype={dtype} range={body['start']}..{body['end']}"
     return head + "\n\n" + format_response(data, body["tickerlist"], max_rows, body["start"], body["end"])
@@ -127,37 +124,47 @@ async def run_timeseries(
 @mcp.tool(annotations=_READ_ONLY)
 async def get_timeseries(
     source: Annotated[SourceName, Field(description="Data source id, see list_sources.")],
-    tickers: Annotated[list[str], Field(description="Tickers in the source's own format, e.g. ['BTCUSDT'] for binance, ['EUR_USD'] for oanda, ['SPY'] for yahoo. Batch several tickers in one call.")],
+    tickers: Annotated[list[str], Field(description="Tickers in the source's own format, e.g. ['BTCUSDT'] for binance, ['EUR_USD'] for oanda, ['SPY'] for yahoo, ['GC'] for cftc, ['gold:CH'] for hmrc. Batch several tickers in one call.")],
     start: Annotated[str, Field(description="Start date, YYYY-MM-DD.")],
     end: Annotated[str, Field(description="End date, YYYY-MM-DD.")],
-    interval: Annotated[Interval, Field(description="Bar size. Support varies by source (list_sources shows each source's intervals).")] = "1d",
-    dtype: Annotated[DType, Field(description="'bars' (OHLCV) everywhere; binance also 'funding'/'orderbook'; oanda also 'orderbook'; alpaca also 'trades'/'quotes'; yahoo also 'earnings'.")] = "bars",
+    interval: Annotated[Interval, Field(description="Bar size: upper-case M is minutes, lower-case m is months (15M = 15 minutes, 1m = one month). Support varies by source (list_sources shows each source's intervals).")] = "1d",
+    dtype: Annotated[DType, Field(description="'bars' everywhere; binance also 'funding'/'orderbook'; oanda also 'orderbook'; alpaca also 'trades'/'quotes'; yahoo also 'earnings'.")] = "bars",
     price_type: Annotated[Literal["M", "A", "B"] | None, Field(description="oanda only: A ask (default), B bid, M mid.")] = None,
     instrument: Annotated[str | None, Field(description="binance: spot (default) or perpetual (needed for dtype funding). kraken: futures (default) or spot.")] = None,
     assetclass: Annotated[Literal["equity", "crypto"] | None, Field(description="alpaca only.")] = None,
     category: Annotated[Literal["linear", "inverse"] | None, Field(description="bybit only: linear (default) or inverse.")] = None,
     feed: Annotated[Literal["iex", "sip"] | None, Field(description="alpaca only: iex (default) or sip (needs a paid Alpaca plan).")] = None,
     frequency: Annotated[Literal["quarterly", "annual"] | None, Field(description="fred and finnhub only: quarterly (default) or annual.")] = None,
+    dataset: Annotated[str | None, Field(description="finra: short_interest (default) or short_volume. edgar: insider (default) or financials. gdelt: themes.")] = None,
+    report: Annotated[Literal["disaggregated", "tff", "legacy"] | None, Field(description="cftc only; default depends on the symbol.")] = None,
+    options: Annotated[bool | None, Field(description="cftc only: include options (futures-equivalent).")] = None,
+    as_of: Annotated[Literal["release", "report"] | None, Field(description="cftc only: stamp at Friday publication (release, default, no look-ahead) or Tuesday position date (report).")] = None,
+    concepts: Annotated[list[str] | None, Field(description="edgar financials only: XBRL concepts, e.g. ['Revenues'].")] = None,
+    period: Annotated[Literal["quarter", "annual"] | None, Field(description="edgar financials only: quarter (default) or annual.")] = None,
+    mode: Annotated[Literal["timelinevol", "timelinevolraw", "timelinetone"] | None, Field(description="gdelt search queries only: share of coverage (default), article count, or tone.")] = None,
+    reporter: Annotated[str | None, Field(description="comext only: EU27_2020 (default) or a member state, e.g. DE.")] = None,
     max_rows: Annotated[int, Field(ge=1, le=HARD_MAX_ROWS, description="Max rows returned per ticker; the most recent rows are kept.")] = DEFAULT_MAX_ROWS,
     ctx: Context | None = None,
 ) -> str:
-    """Fetch historical market data from AuraStream and return it as a CSV table per ticker
-    (timestamp,Open,High,Low,Close,Volume for bars). Long results are cut to the most recent
-    max_rows rows per ticker, with the total row count noted. Each call uses one unit of the
-    user's monthly AuraStream allowance. Provider credentials (oanda, alpaca, polygon, fred,
-    finnhub) come from the server's environment; never ask the user to paste them."""
+    """Fetch historical data from AuraStream and return it as a CSV table per ticker
+    (timestamp,Open,High,Low,Close,Volume for market bars; source-specific fields otherwise, see
+    list_sources). Long results are cut to the most recent max_rows rows per ticker, with the
+    total row count noted. Each call uses one unit of the user's monthly AuraStream allowance.
+    Provider credentials come from the server's environment; never ask the user to paste them."""
     try:
         return await run_timeseries(
             source=source, tickers=tickers, start=start, end=end, interval=interval, dtype=dtype,
+            max_rows=max_rows, api_key=resolve_api_key(_headers(ctx)),
             price_type=price_type, instrument=instrument, assetclass=assetclass, category=category,
-            feed=feed, frequency=frequency, max_rows=max_rows,
-            api_key=resolve_api_key(_headers(ctx)),
+            feed=feed, frequency=frequency, dataset=dataset, report=report, options=options,
+            as_of=as_of, concepts=concepts, period=period, mode=mode, reporter=reporter,
         )
     except AuraStreamError as exc:
         raise ToolError(str(exc)) from None
 
 
-_UNIT_SECONDS = {"s": 1, "m": 60, "h": 3600, "d": 86400, "w": 604800, "M": 2678400, "q": 7948800, "y": 31622400}
+# API convention: M = minutes, m = months.
+_UNIT_SECONDS = {"s": 1, "M": 60, "h": 3600, "d": 86400, "w": 604800, "m": 2678400, "q": 7948800, "y": 31622400}
 _ROUND_THE_CLOCK = {"binance", "bybit", "kraken"}
 
 

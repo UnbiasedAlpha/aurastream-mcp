@@ -10,16 +10,12 @@ from aurastream_mcp import server
 from aurastream_mcp.client import API_URL, AuraStreamError, build_body, credentials_from_env
 from aurastream_mcp.formatting import format_response
 from aurastream_mcp.server import latest_window, list_sources_text, mcp, resolve_api_key
-
-CRED_VARS = [
-    "OANDA_ACCOUNT_ID", "OANDA_TOKEN", "OANDA_ENVIRONMENT", "ALPACA_API_KEY", "ALPACA_SECRET_KEY",
-    "POLYGON_API_KEY", "FRED_API_KEY", "FINNHUB_API_KEY",
-]
+from aurastream_mcp.sources import CREDENTIAL_ENV_VARS, SOURCES
 
 
 @pytest.fixture(autouse=True)
 def clean_env(monkeypatch):
-    for var in CRED_VARS:
+    for var in CREDENTIAL_ENV_VARS:
         monkeypatch.delenv(var, raising=False)
     monkeypatch.setenv("AURASTREAM_API_KEY", "test-key")
     monkeypatch.setattr(server, "_require_client_key", False)
@@ -75,9 +71,46 @@ def test_body_alpaca_and_fred_field_names(monkeypatch):
     assert alpaca["credentials"] == {"api_key": "ak", "key": "ak", "secret_key": "as", "secret": "as"}
     assert alpaca["feed"] == "iex"
     assert alpaca["dtype"] == "trades" and alpaca["assetclass"] == "crypto"
-    fred = build_body("fred", ["UNRATE"], "2020-01-01", "2025-01-01", "1M", frequency="annual")
+    fred = build_body("fred", ["UNRATE"], "2020-01-01", "2025-01-01", "1m", frequency="annual")
     assert fred["credentials"] == {"api_key": "fk", "key": "fk"}
     assert fred["frequency"] == "annual"
+
+
+def test_intervals_follow_api_case_convention():
+    # Upper-case M is minutes, lower-case m is months, as the API parses them.
+    assert build_body("yahoo", ["SPY"], "2025-01-01", "2025-01-05", "15M")["interval"] == "15M"
+    assert build_body("yahoo", ["SPY"], "2020-01-01", "2025-01-01", "1m")["interval"] == "1m"
+    for source in SOURCES.values():
+        for interval in source.intervals or ():
+            unit = interval.lstrip("0123456789")
+            assert unit in {"s", "M", "h", "d", "w", "m", "q", "y"}, (source.name, interval)
+
+
+def test_body_new_public_sources():
+    cftc = build_body("cftc", ["GC", "ZN"], "2020-01-01", "2025-01-01", "1w", report="legacy", options=True, as_of="report")
+    assert cftc == {
+        "tickerlist": ["GC", "ZN"], "start": "2020-01-01", "end": "2025-01-01", "interval": "1w", "source": "cftc",
+        "report": "legacy", "options": True, "as_of": "report",
+    }
+    assert build_body("finra", ["AAPL"], "2024-01-01", "2024-02-01", dataset="short_volume")["dataset"] == "short_volume"
+    assert build_body("comext", ["gold:CH"], "2020-01-01", "2025-01-01", "1m", reporter="DE")["reporter"] == "DE"
+    themes = build_body("gdelt", ["ECON_GOLDPRICE"], "2024-01-01", "2024-02-01", "1h", dataset="themes")
+    assert themes["dataset"] == "themes" and "credentials" not in themes
+    for name in ("treasury", "defillama", "worldbank", "hmrc", "hktrade"):
+        interval = SOURCES[name].intervals[0]
+        assert "credentials" not in build_body(name, ["x"], "2020-01-01", "2025-01-01", interval)
+
+
+def test_body_new_credentialed_sources(monkeypatch):
+    monkeypatch.setenv("EIA_API_KEY", "eia")
+    monkeypatch.setenv("CENSUS_API_KEY", "census")
+    monkeypatch.setenv("EDGAR_USER_AGENT", "Acme ops@acme.test")
+    assert build_body("eia", ["crude_stocks"], "2020-01-01", "2025-01-01", "1w")["credentials"] == {"api_key": "eia"}
+    assert build_body("uscensus", ["gold"], "2020-01-01", "2025-01-01", "1m")["credentials"] == {"api_key": "census"}
+    edgar = build_body("edgar", ["AAPL"], "2024-01-01", "2025-01-01", dataset="financials",
+                       concepts=[" Revenues ", "NetIncomeLoss"], period="annual")
+    assert edgar["credentials"] == {"user_agent": "Acme ops@acme.test"}
+    assert edgar["concepts"] == ["Revenues", "NetIncomeLoss"] and edgar["period"] == "annual"
 
 
 def test_missing_credentials_names_env_vars():
@@ -85,6 +118,8 @@ def test_missing_credentials_names_env_vars():
         credentials_from_env("polygon")
     with pytest.raises(AuraStreamError, match="OANDA_ACCOUNT_ID, OANDA_TOKEN"):
         build_body("oanda", ["EUR_USD"], "2025-01-01", "2025-01-10")
+    with pytest.raises(AuraStreamError, match="EDGAR_USER_AGENT"):
+        build_body("edgar", ["AAPL"], "2024-01-01", "2025-01-01")
 
 
 @pytest.mark.parametrize(
@@ -100,6 +135,14 @@ def test_missing_credentials_names_env_vars():
         ({"dtype": "trades"}, "supports dtype"),
         ({"price_type": "M"}, "does not apply"),
         ({"tickers": [" "]}, "at least one ticker"),
+        # Lower-case m is months; yahoo has no 15-month interval.
+        ({"interval": "15m"}, "does not support interval"),
+        ({"source": "hmrc", "tickers": ["gold"], "interval": "1d"}, "does not support interval"),
+        ({"source": "cftc", "tickers": ["GC"], "interval": "1w", "options": "yes"}, "must be true or false"),
+        ({"source": "cftc", "tickers": ["GC"], "interval": "1w", "report": "weekly"}, "report for 'cftc' must be"),
+        ({"source": "finra", "tickers": ["AAPL"], "dataset": "insider"}, "dataset for 'finra' must be"),
+        ({"source": "comext", "tickers": ["gold"], "interval": "1m", "reporter": " "}, "non-empty string"),
+        ({"source": "yahoo", "dataset": "themes"}, "does not apply"),
     ],
 )
 def test_body_validation(kwargs, match):
@@ -151,6 +194,22 @@ async def test_unknown_argument_cannot_inject_credentials(monkeypatch):
             )
     assert route.called
     assert json.loads(route.calls.last.request.content)["credentials"] == {"api_key": "env-fred", "key": "env-fred"}
+
+
+@respx.mock
+async def test_get_timeseries_new_source_params_and_fields():
+    payload = {"GC": {"2025-01-03 20:30:00": {"report_date": "2024-12-31", "mm_long": 250000, "mm_short": 40000}}}
+    route = respx.post(API_URL).mock(return_value=httpx.Response(200, json=payload))
+    async with Client(mcp) as client:
+        result = await client.call_tool(
+            "get_timeseries",
+            {"source": "cftc", "tickers": ["GC"], "start": "2024-12-01", "end": "2025-01-10",
+             "interval": "1w", "report": "disaggregated", "options": False},
+        )
+    assert not result.is_error
+    sent = json.loads(route.calls.last.request.content)
+    assert sent["report"] == "disaggregated" and sent["options"] is False and "dataset" not in sent
+    assert "timestamp,report_date,mm_long,mm_short" in text_of(result)
 
 
 @respx.mock
@@ -240,13 +299,17 @@ def test_list_sources_reports_configuration(monkeypatch):
     assert "required, configured" in fred
     polygon = text.split("- polygon")[1].split("\n- ")[0]
     assert "NOT configured (set POLYGON_API_KEY)" in polygon
+    assert "- hktrade (Hong Kong Trade)" in text
+    finra = text.split("- finra")[1].split("\n- ")[0]
+    assert "param dataset:" in finra and "fields: short_interest:" in finra
 
 
 def test_latest_window():
     now = datetime(2025, 6, 15, 12, 0, tzinfo=timezone.utc)
     assert latest_window("yahoo", "1d", 10, now) == ("2025-05-26", "2025-06-16")
     assert latest_window("binance", "1h", 10, now) == ("2025-06-13", "2025-06-16")
-    assert latest_window("oanda", "1M", 3, now)[0] == "2025-01-21"
+    assert latest_window("oanda", "1m", 3, now)[0] == "2025-01-21"
+    assert latest_window("binance", "15M", 96, now) == ("2025-06-12", "2025-06-16")
 
 
 @respx.mock
