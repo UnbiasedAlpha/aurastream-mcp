@@ -1,6 +1,6 @@
 # aurastream-mcp
 
-An [MCP](https://modelcontextprotocol.io) server for [AuraStream](https://aurastream.unbiased-alpha.com), the unified historical data API. It lets Claude Desktop, Claude Code, ChatGPT and other MCP clients pull OHLCV bars (and, for some sources, funding rates, trades, quotes, order books and earnings) from crypto exchanges, Yahoo Finance, Oanda, Alpaca, Polygon and others, plus macro, positioning and trade-flow data such as FRED, CFTC Commitments of Traders, SEC insider trades, earnings filings, fails-to-deliver and 13F holdings, the US economic release calendar, UK/EU/US/Hong Kong metals trade, TSA travel numbers and historical weather: all 38 AuraStream sources through one tool.
+An [MCP](https://modelcontextprotocol.io) server for [AuraStream](https://aurastream.unbiased-alpha.com), the unified historical data API. It lets Claude Desktop, Claude Code, ChatGPT and other MCP clients pull OHLCV bars (and, for some sources, funding rates, trades, quotes, order books and earnings) from crypto exchanges, Yahoo Finance, Oanda, Alpaca, Polygon and others, plus macro, positioning and trade-flow data such as FRED, CFTC Commitments of Traders, SEC insider trades, earnings filings, fails-to-deliver and 13F holdings, the US economic release calendar, UK/EU/US/Hong Kong metals trade, TSA travel numbers and historical weather: US retail sales and consumer spending (PCE), all 39 AuraStream sources through one tool.
 
 Ask "plot BTC daily closes for Q1 from Binance", "compare SPY and QQQ drawdowns this year" or "how have hedge funds positioned in gold futures since 2020?" and the model calls AuraStream for the data.
 
@@ -20,7 +20,7 @@ Sources exposed:
 |---|---|
 | Crypto | `binance`, `bybit`, `kraken`, `deribit`, `kucoin`, `dydx`, `hyperliquid`, `lyra` (Derive); with your own key: `coinapi`; with a [Nemeton](https://unbiased-alpha.com) subscription: `nemeton` (order book signals) |
 | Equities, FX, futures, CFDs | `yahoo`; with your own account: `oanda`, `alpaca`, `polygon`, `firstrate`, `tradestation`, `cityindex` |
-| Macro and energy | `treasury`, `worldbank`, `sdmx` (BIS, ECB, IMF, OECD...), `econcalendar` (US release times); with a free key: `fred`, `eia`; with your own key: `tradingeconomics`, `nasdaq` |
+| Macro and energy | `treasury`, `worldbank`, `sdmx` (BIS, ECB, IMF, OECD...), `econcalendar` (US release times); with a free key: `fred`, `eia`, `bea` (PCE, income, GDP); with your own key: `tradingeconomics`, `nasdaq` |
 | Fundamentals | `edgar` (insider trades, reported financials, earnings filings, fails-to-deliver, 13F holdings); with your own key: `finnhub` |
 | Positioning and flows | `cftc` (Commitments of Traders), `hmrc`, `comext`, `hktrade`; with a free key: `uscensus` |
 | Crypto fundamentals and news | `defillama`, `gdelt`; with a free key: `coingecko` |
@@ -55,7 +55,8 @@ All secrets come from environment variables. Provider credentials are **never** 
 | `FINNHUB_API_KEY` | `finnhub` |
 | `FIRSTRATE_USER_ID` | `firstrate`: the user ID FirstRate Data gives you for API downloads |
 | `EIA_API_KEY` | `eia` (free at [eia.gov](https://www.eia.gov/opendata/register.php)) |
-| `CENSUS_API_KEY` | `uscensus` (free at [census.gov](https://api.census.gov/data/key_signup.html)) |
+| `CENSUS_API_KEY` | `uscensus`: trade and retail sales (free at [census.gov](https://api.census.gov/data/key_signup.html)) |
+| `BEA_API_KEY` | `bea` (free at [apps.bea.gov](https://apps.bea.gov/API/signup/)) |
 | `EDGAR_USER_AGENT` | `edgar` and `econcalendar` (BLS): your name and contact email, e.g. `Your Company contact@yourcompany.com`. The SEC requires it; no registration. |
 | `NEMETON_API_KEY` | `nemeton`: the key from your Nemeton subscription |
 | `COINAPI_KEY` | `coinapi` |

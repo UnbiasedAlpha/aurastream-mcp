@@ -1,3 +1,3 @@
 """MCP server for the AuraStream market data API."""
 
-__version__ = "0.1.3"
+__version__ = "0.1.4"

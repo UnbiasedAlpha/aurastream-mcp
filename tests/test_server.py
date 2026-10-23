@@ -120,6 +120,11 @@ def test_body_new_credentialed_sources(monkeypatch):
     monkeypatch.setenv("EDGAR_USER_AGENT", "Acme ops@acme.test")
     assert build_body("eia", ["crude_stocks"], "2020-01-01", "2025-01-01", "1w")["credentials"] == {"api_key": "eia"}
     assert build_body("uscensus", ["gold"], "2020-01-01", "2025-01-01", "1m")["credentials"] == {"api_key": "census"}
+    retail = build_body("uscensus", ["total"], "2020-01-01", "2025-01-01", "1m", dataset="retail", adjusted=False)
+    assert retail["dataset"] == "retail" and retail["adjusted"] is False
+    monkeypatch.setenv("BEA_API_KEY", "bea")
+    bea = build_body("bea", ["pce"], "2024-01-01", "2025-01-01", "1m", frequency="M")
+    assert bea["credentials"] == {"api_key": "bea"} and bea["frequency"] == "M"
     edgar = build_body("edgar", ["AAPL"], "2024-01-01", "2025-01-01", dataset="financials",
                        concepts=[" Revenues ", "NetIncomeLoss"], period="annual")
     assert edgar["credentials"] == {"user_agent": "Acme ops@acme.test"}
@@ -357,7 +362,7 @@ async def test_get_latest_returns_requested_bars():
 # --- sources added in 0.1.2 -------------------------------------------------
 
 def test_all_api_sources_are_exposed():
-    assert len(SOURCES) == 38
+    assert len(SOURCES) == 39
     for name in ("deribit", "kucoin", "dydx", "hyperliquid", "lyra", "sdmx", "openmeteo"):
         assert not SOURCES[name].needs_credentials
 
