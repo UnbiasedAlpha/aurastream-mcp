@@ -31,10 +31,10 @@ Dates are `YYYY-MM-DD`. Intervals follow the API: upper-case `M` is minutes, low
 Requires Python 3.10+.
 
 ```bash
-pip install "git+https://github.com/UnbiasedAlpha/aurastream-mcp"
+pip install aurastream-mcp
 ```
 
-A PyPI release (`pip install aurastream-mcp` / `uvx aurastream-mcp`) is planned; the snippets below work the same either way.
+Or run it without installing, with [uv](https://docs.astral.sh/uv/): `uvx aurastream-mcp`.
 
 This installs an `aurastream-mcp` command. Check it with `aurastream-mcp --help`.
 
