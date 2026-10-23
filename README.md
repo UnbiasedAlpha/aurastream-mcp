@@ -1,5 +1,7 @@
 # aurastream-mcp
 
+<!-- mcp-name: io.github.UnbiasedAlpha/aurastream-mcp -->
+
 An [MCP](https://modelcontextprotocol.io) server for [AuraStream](https://aurastream.unbiased-alpha.com), the unified historical data API. It lets Claude Desktop, Claude Code, ChatGPT and other MCP clients pull OHLCV bars (and, for some sources, funding rates, trades, quotes, order books and earnings) from crypto exchanges, Yahoo Finance, Oanda, Alpaca, Polygon and others, plus macro, positioning and trade-flow data such as FRED, CFTC Commitments of Traders, SEC insider trades, earnings filings, fails-to-deliver and 13F holdings, the US economic release calendar, UK/EU/US/Hong Kong metals trade, TSA travel numbers and historical weather: US retail sales and consumer spending (PCE), all 39 AuraStream sources through one tool.
 
 Ask "plot BTC daily closes for Q1 from Binance", "compare SPY and QQQ drawdowns this year" or "how have hedge funds positioned in gold futures since 2020?" and the model calls AuraStream for the data.
