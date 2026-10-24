@@ -445,25 +445,30 @@ SOURCES: dict[str, Source] = {
             name="edgar",
             label="SEC EDGAR",
             asset_classes="US insider trades (Form 4), reported company financials (XBRL), earnings release filings, "
-                          "fails-to-deliver and institutional holdings (13F)",
+                          "fails-to-deliver, institutional holdings (13F) and mutual fund / ETF holdings (N-PORT)",
             ticker_format="US stock symbols (AAPL) or SEC CIK numbers (320193); 13f: the manager's CIK (1067983 = Berkshire); "
-                          "ftd: symbol or CUSIP",
+                          "ftd: symbol or CUSIP; nport: fund ticker (VTSAX, IVV, SPY) or SEC series id (S000002848)",
             intervals=("1d",),
             credentials=(CredentialField(("user_agent",), "EDGAR_USER_AGENT"),),
             params={
                 "dataset": Param('"insider" (default, Form 4 trades), "financials", "earnings" (8-K item 2.02 filings), '
-                                 '"ftd" (fails-to-deliver) or "13f" (institutional holdings)',
-                                 ("insider", "financials", "earnings", "ftd", "13f")),
+                                 '"ftd" (fails-to-deliver), "13f" (institutional holdings) or "nport" (fund holdings)',
+                                 ("insider", "financials", "earnings", "ftd", "13f", "nport")),
                 "concepts": Param("financials only: XBRL concepts, e.g. Revenues; default is a standard set", is_list=True),
                 "period": Param('financials only: "quarter" (default) or "annual"', ("quarter", "annual")),
+                "top": Param("nport only: keep the largest N positions of each filing (default all)", is_int=True),
             },
             fields="insider: owner, officer_title, buy_shares, buy_value, sell_shares, sell_value, other_shares_net, plan_10b5_1, "
                    "shares_owned_after, ... (one row per filing, stamped when it became public). financials: one row per filing with each concept's value and period. "
                    "earnings: event_date, items, url (one row per earnings 8-K, stamped at SEC acceptance). ftd: fails, price, cusip, symbol. "
-                   "13f: report_period, n_positions, total_value, holdings (list of issuer, cusip, value, shares, put_call)",
+                   "13f: report_period, n_positions, total_value, holdings (list of issuer, cusip, value, shares, put_call). "
+                   "nport: fund, report_period, total_assets, net_assets, flow_sales, flow_redemptions, flow_reinvestment, returns_pct, "
+                   "n_holdings, holdings (largest first: name, cusip, isin, ticker, balance, value_usd, pct_net_assets, asset_cat, country)",
             notes='EDGAR_USER_AGENT is a name and contact email, e.g. "Your Company contact@yourcompany.com" (SEC rule; no registration). '
                   "ftd is published twice a month about two weeks after each half-month and stamped at the settlement date; "
-                  "13f is filed up to 45 days after the quarter end (request a year or less for large managers).",
+                  "13f is filed up to 45 days after the quarter end (request a year or less for large managers). "
+                  "nport: only each fiscal quarter's last month is public, about 60 days later, from late 2019; "
+                  "use top (e.g. 50) for funds with thousands of positions.",
         ),
         Source(
             name="hmrc",
