@@ -130,6 +130,8 @@ def test_body_new_credentialed_sources(monkeypatch):
     assert edgar["credentials"] == {"user_agent": "Acme ops@acme.test"}
     assert edgar["concepts"] == ["Revenues", "NetIncomeLoss"] and edgar["period"] == "annual"
     assert build_body("edgar", ["GME"], "2025-01-01", "2025-02-01", dataset="ftd")["dataset"] == "ftd"
+    nport = build_body("edgar", ["VTSAX"], "2025-01-01", "2026-01-01", dataset="nport", top=50)
+    assert nport["dataset"] == "nport" and nport["top"] == 50
     assert build_body("econcalendar", ["bls"], "2025-01-01", "2025-12-31")["credentials"] == {"user_agent": "Acme ops@acme.test"}
 
 
@@ -336,7 +338,7 @@ def test_list_sources_reports_configuration(monkeypatch):
     assert "NOT configured (set POLYGON_API_KEY)" in polygon
     assert "- hktrade (Hong Kong Trade)" in text
     edgar = text.split("- edgar")[1].split("\n- ")[0]
-    assert "param dataset:" in edgar and "13f" in edgar
+    assert "param dataset:" in edgar and "13f" in edgar and "nport" in edgar and "param top:" in edgar
     assert "- finra" not in text
 
 
