@@ -1,0 +1,42 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.UnbiasedAlpha/aurastream-mcp",
+  "title": "AuraStream",
+  "description": "Historical market, macro, positioning and alt data from 39 sources through one API.",
+  "websiteUrl": "https://aurastream.unbiased-alpha.com",
+  "repository": {
+    "url": "https://github.com/UnbiasedAlpha/aurastream-mcp",
+    "source": "github"
+  },
+  "version": "0.1.4",
+  "packages": [
+    {
+      "registryType": "pypi",
+      "registryBaseUrl": "https://pypi.org",
+      "identifier": "aurastream-mcp",
+      "version": "0.1.4",
+      "runtimeHint": "uvx",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "name": "AURASTREAM_API_KEY",
+          "description": "Your AuraStream API key. A free plan (500 calls/month, no card) is at https://aurastream.unbiased-alpha.com",
+          "isRequired": true,
+          "isSecret": true
+        },
+        {
+          "name": "NEMETON_API_KEY",
+          "description": "Optional: the key from a Nemeton subscription, for the nemeton order book source.",
+          "isSecret": true
+        },
+        {
+          "name": "FRED_API_KEY",
+          "description": "Optional: free FRED key, for the fred source. Other provider keys are listed in the README.",
+          "isSecret": true
+        }
+      ]
+    }
+  ]
+}
