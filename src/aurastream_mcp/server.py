@@ -23,7 +23,7 @@ INSTRUCTIONS = """\
 AuraStream is a historical data API behind one endpoint: market data (crypto exchanges and DEXs,
 equities, FX, futures, CFDs), crypto order book signals (Nemeton), macro and energy (FRED, EIA, US Treasury,
 World Bank, SDMX central bank series, Trading Economics, Nasdaq Data Link), positioning and flows (CFTC,
-SEC insider trades, earnings filings, fails-to-deliver, 13F and fund (N-PORT) holdings, UK/EU/US/Hong Kong trade), crypto fundamentals and news
+SEC insider trades and planned sales, 8-K events, fails-to-deliver, 13D/13G stakes, 13F and fund holdings and votes, UK/EU/US/Hong Kong trade), crypto fundamentals and news
 (DefiLlama, CoinGecko, GDELT) and historical weather (Open-Meteo, Visual Crossing).
 Call list_sources first if unsure which source covers something or how its tickers are written.
 Intervals: upper-case M is minutes, lower-case m is months (15M = 15 minutes, 1m = one month).
@@ -160,7 +160,7 @@ async def get_timeseries(
     sessiontemplate: Annotated[str | None, Field(description="tradestation only: trading session, e.g. Default or USEQPreAndPost.")] = None,
     closed_only: Annotated[bool | None, Field(description="tradestation only: leave out the bar still forming (default true).")] = None,
     bartype: Annotated[Literal["bar", "tick"] | None, Field(description="cityindex only: bar (default) or tick.")] = None,
-    dataset: Annotated[str | None, Field(description="edgar: insider (default), financials, earnings, ftd, 13f or nport. uscensus: trade (default) or retail. gdelt: themes.")] = None,
+    dataset: Annotated[str | None, Field(description="edgar: insider (default), financials, earnings, events, ftd, 13dg, 144, 13f, nport or npx. uscensus: trade (default) or retail. gdelt: themes.")] = None,
     report: Annotated[Literal["disaggregated", "tff", "legacy"] | None, Field(description="cftc only; default depends on the symbol.")] = None,
     options: Annotated[bool | None, Field(description="cftc only: include options (futures-equivalent).")] = None,
     as_of: Annotated[Literal["release", "report", "realtime_start", "date"] | None, Field(description="cftc: release (default, stamped at Friday publication, no look-ahead) or report (Tuesday position date). fred: realtime_start (default, stamped at publication) or date (period described).")] = None,
@@ -171,6 +171,8 @@ async def get_timeseries(
     adjusted: Annotated[bool | None, Field(description="uscensus retail only: seasonally adjusted (default true).")] = None,
     frequency: Annotated[Literal["M", "Q", "A"] | None, Field(description="bea only: M, Q or A (default: the series' own).")] = None,
     top: Annotated[int | None, Field(ge=1, description="edgar nport only: keep the largest N positions of each filing.")] = None,
+    items: Annotated[list[str] | None, Field(description="edgar events only: 8-K item numbers, e.g. ['5.02'].")] = None,
+    issuer: Annotated[str | None, Field(description="edgar npx only: company whose votes to return (CUSIP, ISIN or name).")] = None,
     max_rows: Annotated[int, Field(ge=1, le=HARD_MAX_ROWS, description="Max rows returned per ticker; the most recent rows are kept.")] = DEFAULT_MAX_ROWS,
     ctx: Context | None = None,
 ) -> str:
@@ -191,7 +193,7 @@ async def get_timeseries(
             metric=metric, level=level, db=db, filters=filters, assetcol=assetcol, index=index,
             variables=variables, timezone=timezone, unit_group=unit_group, vs_currency=vs_currency,
             sessiontemplate=sessiontemplate, closed_only=closed_only, bartype=bartype,
-            adjusted=adjusted, frequency=frequency, top=top,
+            adjusted=adjusted, frequency=frequency, top=top, items=items, issuer=issuer,
         )
     except AuraStreamError as exc:
         raise ToolError(str(exc)) from None
