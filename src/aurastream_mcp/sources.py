@@ -319,16 +319,14 @@ SOURCES: dict[str, Source] = {
             name="fred",
             label="FRED",
             asset_classes="Economic indicators (CPI, GDP, interest rates)",
-            ticker_format="FRED series IDs (CPIAUCSL, GDPC1, UNRATE, DFF), or 2-letter country codes (US, UK, DE, JP) "
-                          "with indicator set",
+            ticker_format="FRED series IDs, e.g. CPIAUCSL, GDPC1, UNRATE, DFF",
             credentials=(CredentialField(("key",), "FRED_API_KEY"),),
             params={
-                "indicator": Param('country shortcut, tickers are then country codes (UK, not GB): "cpi", "gdp", '
-                                   '"3mrate" or "10yrate"', ("cpi", "gdp", "3mrate", "10yrate"), api_name="bars"),
                 "as_of": Param('"realtime_start" (default, rows stamped at publication) or "date" (period the value '
                                "describes)", ("realtime_start", "date")),
             },
-            notes="Data comes at the series' native frequency; interval is accepted but does not resample.",
+            notes="Data comes at the series' native frequency; interval is accepted but does not resample. "
+                  "FRED stops updating some series: check the series' last observation before relying on it.",
         ),
         Source(
             name="finnhub",

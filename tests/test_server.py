@@ -82,10 +82,9 @@ def test_body_alpaca_and_fred_field_names(monkeypatch):
     assert alpaca["credentials"] == {"key": "ak", "secret": "as"}
     assert alpaca["feed"] == "iex"
     assert alpaca["dtype"] == "trades" and alpaca["assetclass"] == "crypto"
-    fred = build_body("fred", ["UK", "US"], "2020-01-01", "2025-01-01", "1m", indicator="cpi", as_of="date")
+    fred = build_body("fred", ["CPIAUCSL"], "2020-01-01", "2025-01-01", "1m", as_of="date")
     assert fred["credentials"] == {"key": "fk"}
-    # The country shortcut is the API's "bars" field.
-    assert fred["bars"] == "cpi" and "indicator" not in fred and fred["as_of"] == "date"
+    assert fred["as_of"] == "date" and "bars" not in fred
 
 
 def test_intervals_follow_api_case_convention():
@@ -177,7 +176,8 @@ def test_missing_credentials_names_env_vars():
         ({"source": "binance", "tickers": ["BTCUSDT"], "interval": "1m"}, "does not support interval"),
         ({"source": "binance", "tickers": ["BTCUSDT"], "dtype": "orderbook"}, "supports dtype"),
         ({"source": "binance", "tickers": ["BTCUSDT"], "indicator": "cpi"}, "does not apply"),
-        ({"source": "fred", "tickers": ["UK"], "indicator": "cpi", "as_of": "release"}, "as_of for 'fred' must be"),
+        ({"source": "fred", "tickers": ["CPIAUCSL"], "as_of": "release"}, "as_of for 'fred' must be"),
+        ({"source": "fred", "tickers": ["UK"], "indicator": "cpi"}, "does not apply"),
         ({"source": "firstrate", "tickers": ["CL"], "instrument": "spot"}, "instrument for 'firstrate' must be"),
         ({"source": "binance", "tickers": ["BTCUSDT"], "instrument": "stock"}, "instrument for 'binance' must be"),
         ({"dtype": "trades"}, "supports dtype"),

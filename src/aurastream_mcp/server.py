@@ -146,7 +146,7 @@ async def get_timeseries(
     category: Annotated[Literal["linear", "inverse"] | None, Field(description="bybit only: linear (default) or inverse.")] = None,
     feed: Annotated[Literal["iex", "sip"] | None, Field(description="alpaca stocks only: iex (default) or sip (consolidated tape).")] = None,
     adjustment: Annotated[Literal["raw", "split", "dividend", "all"] | None, Field(description="alpaca stock bars only: raw (default), split, dividend or all.")] = None,
-    indicator: Annotated[str | None, Field(description="fred: country shortcut cpi, gdp, 3mrate or 10yrate; tickers are then 2-letter country codes (UK, not GB). tradingeconomics (required): indicator name, e.g. 'gdp', 'inflation rate'.")] = None,
+    indicator: Annotated[str | None, Field(description="tradingeconomics (required): indicator name, e.g. 'gdp', 'inflation rate'.")] = None,
     metric: Annotated[str | None, Field(description="nemeton (required): signal name, e.g. cumulative-depth, orderbook-pressure, spread (list_sources has all).")] = None,
     level: Annotated[int | None, Field(description="nemeton only: order book depth the metric is computed over (default 1000).")] = None,
     db: Annotated[str | None, Field(description="sdmx (required): provider ID, e.g. BIS, ECB, ESTAT, IMF, OECD.")] = None,
