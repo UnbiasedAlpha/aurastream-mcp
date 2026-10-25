@@ -136,6 +136,13 @@ def test_body_new_credentialed_sources(monkeypatch):
     assert ev["items"] == ["5.02"]
     npx = build_body("edgar", ["VTSAX"], "2025-01-01", "2026-01-01", dataset="npx", issuer="Tesla")
     assert npx["issuer"] == "Tesla"
+    ns = build_body("netshort", ["ubisoft"], "2026-01-01", "2026-10-01", "1d", country=["FR"], holder="citadel")
+    assert ns["country"] == ["FR"] and ns["holder"] == "citadel" and "credentials" not in ns
+    assert build_body("degreedays", ["hdd:US"], "2026-01-01", "2026-03-01", "1d", weights="gas")["weights"] == "gas"
+    us = build_body("usaspending", ["palantir"], "2024-01-01", "2026-01-01", "1m", dataset="awards", min_amount=1000000)
+    assert us["dataset"] == "awards" and us["min_amount"] == 1000000
+    assert build_body("warn", ["all"], "2026-01-01", "2026-10-01", "1d", state=["CA"])["state"] == ["CA"]
+    assert build_body("fedtext", ["speeches"], "2026-01-01", "2026-10-01", "1d", speaker="powell")["speaker"] == "powell"
     assert build_body("econcalendar", ["bls"], "2025-01-01", "2025-12-31")["credentials"] == {"user_agent": "Acme ops@acme.test"}
 
 
@@ -368,7 +375,7 @@ async def test_get_latest_returns_requested_bars():
 # --- sources added in 0.1.2 -------------------------------------------------
 
 def test_all_api_sources_are_exposed():
-    assert len(SOURCES) == 39
+    assert len(SOURCES) == 45
     for name in ("deribit", "kucoin", "dydx", "hyperliquid", "lyra", "sdmx", "openmeteo"):
         assert not SOURCES[name].needs_credentials
 

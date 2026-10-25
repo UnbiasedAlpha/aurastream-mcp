@@ -2,7 +2,7 @@
 
 <!-- mcp-name: io.github.UnbiasedAlpha/aurastream-mcp -->
 
-An [MCP](https://modelcontextprotocol.io) server for [AuraStream](https://aurastream.unbiased-alpha.com), the unified historical data API. It lets Claude Desktop, Claude Code, ChatGPT and other MCP clients pull OHLCV bars (and, for some sources, funding rates, trades, quotes, order books and earnings) from crypto exchanges, Yahoo Finance, Oanda, Alpaca, Polygon and others, plus macro, positioning and trade-flow data such as FRED, CFTC Commitments of Traders, SEC insider trades, earnings filings, planned insider sales, 8-K events, fails-to-deliver, 13D/13G stakes, 13F and mutual fund/ETF holdings and votes, the US economic release calendar, UK/EU/US/Hong Kong metals trade, TSA travel numbers and historical weather: US retail sales and consumer spending (PCE), all 39 AuraStream sources through one tool.
+An [MCP](https://modelcontextprotocol.io) server for [AuraStream](https://aurastream.unbiased-alpha.com), the unified historical data API. It lets Claude Desktop, Claude Code, ChatGPT and other MCP clients pull OHLCV bars (and, for some sources, funding rates, trades, quotes, order books and earnings) from crypto exchanges, Yahoo Finance, Oanda, Alpaca, Polygon and others, plus macro, positioning and trade-flow data such as FRED, CFTC Commitments of Traders, SEC insider trades, earnings filings, planned insider sales, 8-K events, fails-to-deliver, 13D/13G stakes, 13F and mutual fund/ETF holdings and votes, the US economic release calendar, UK/EU/US/Hong Kong metals trade, TSA travel numbers, historical weather and degree days, US retail sales and consumer spending (PCE), USDA crop projections (WASDE), EU short positions, WARN layoff notices, federal contract spending and Fed statements, minutes and speeches: all 45 AuraStream sources through one tool.
 
 Ask "plot BTC daily closes for Q1 from Binance", "compare SPY and QQQ drawdowns this year" or "how have hedge funds positioned in gold futures since 2020?" and the model calls AuraStream for the data.
 
@@ -22,11 +22,11 @@ Sources exposed:
 |---|---|
 | Crypto | `binance`, `bybit`, `kraken`, `deribit`, `kucoin`, `dydx`, `hyperliquid`, `lyra` (Derive); with your own key: `coinapi`; with a [Nemeton](https://unbiased-alpha.com) subscription: `nemeton` (order book signals) |
 | Equities, FX, futures, CFDs | `yahoo`; with your own account: `oanda`, `alpaca`, `polygon`, `firstrate`, `tradestation`, `cityindex` |
-| Macro and energy | `treasury`, `worldbank`, `sdmx` (BIS, ECB, IMF, OECD...), `econcalendar` (US release times); with a free key: `fred`, `eia`, `bea` (PCE, income, GDP); with your own key: `tradingeconomics`, `nasdaq` |
-| Fundamentals | `edgar` (insider trades, reported financials, earnings filings, planned sales (144), 8-K events, fails-to-deliver, 13D/13G stakes, 13F holdings, fund and ETF holdings (N-PORT) and votes (N-PX)); with your own key: `finnhub` |
-| Positioning and flows | `cftc` (Commitments of Traders), `hmrc`, `comext`, `hktrade`; with a free key: `uscensus` |
+| Macro and energy | `treasury`, `worldbank`, `sdmx` (BIS, ECB, IMF, OECD...), `econcalendar` (US release times), `fedtext` (FOMC statements, minutes, Fed speeches), `wasde` (USDA crop projections); with a free key: `fred`, `eia`, `bea` (PCE, income, GDP); with your own key: `tradingeconomics`, `nasdaq` |
+| Fundamentals | `edgar` (insider trades, reported financials, earnings filings, planned sales (144), 8-K events, fails-to-deliver, 13D/13G stakes, 13F holdings, fund and ETF holdings (N-PORT) and votes (N-PX)), `usaspending` (federal contracts by company), `warn` (layoff notices); with your own key: `finnhub` |
+| Positioning and flows | `cftc` (Commitments of Traders), `netshort` (EU short positions), `hmrc`, `comext`, `hktrade`; with a free key: `uscensus` |
 | Crypto fundamentals and news | `defillama`, `gdelt`; with a free key: `coingecko` |
-| Weather and travel | `openmeteo`, `tsa` (daily air travelers); with your own key: `visualcrossing` |
+| Weather and travel | `openmeteo`, `degreedays` (heating and cooling degree days), `tsa` (daily air travelers); with your own key: `visualcrossing` |
 
 Dates are `YYYY-MM-DD`. Intervals follow the API: upper-case `M` is minutes, lower-case `m` is months (`15M` = 15 minutes, `1m` = one month). The server checks intervals, dtypes and parameters against each source's documented values before calling the API.
 
