@@ -319,16 +319,14 @@ SOURCES: dict[str, Source] = {
             name="fred",
             label="FRED",
             asset_classes="Economic indicators (CPI, GDP, interest rates)",
-            ticker_format="FRED series IDs (CPIAUCSL, GDPC1, UNRATE, DFF), or 2-letter country codes (US, UK, DE, JP) "
-                          "with indicator set",
+            ticker_format="FRED series IDs, e.g. CPIAUCSL, GDPC1, UNRATE, DFF",
             credentials=(CredentialField(("key",), "FRED_API_KEY"),),
             params={
-                "indicator": Param('country shortcut, tickers are then country codes (UK, not GB): "cpi", "gdp", '
-                                   '"3mrate" or "10yrate"', ("cpi", "gdp", "3mrate", "10yrate"), api_name="bars"),
                 "as_of": Param('"realtime_start" (default, rows stamped at publication) or "date" (period the value '
                                "describes)", ("realtime_start", "date")),
             },
-            notes="Data comes at the series' native frequency; interval is accepted but does not resample.",
+            notes="Data comes at the series' native frequency; interval is accepted but does not resample. "
+                  "FRED stops updating some series: check the series' last observation before relying on it.",
         ),
         Source(
             name="finnhub",
@@ -444,31 +442,42 @@ SOURCES: dict[str, Source] = {
         Source(
             name="edgar",
             label="SEC EDGAR",
-            asset_classes="US insider trades (Form 4), reported company financials (XBRL), earnings release filings, "
-                          "fails-to-deliver, institutional holdings (13F) and mutual fund / ETF holdings (N-PORT)",
+            asset_classes="US insider trades (Form 4) and planned sales (144), reported company financials (XBRL), earnings "
+                          "releases and all 8-K events, fails-to-deliver, 5%+ stakes (13D/13G), institutional holdings (13F), "
+                          "mutual fund / ETF holdings (N-PORT) and fund proxy votes (N-PX)",
             ticker_format="US stock symbols (AAPL) or SEC CIK numbers (320193); 13f: the manager's CIK (1067983 = Berkshire); "
-                          "ftd: symbol or CUSIP; nport: fund ticker (VTSAX, IVV, SPY) or SEC series id (S000002848)",
+                          "ftd: symbol or CUSIP; 13dg, 144, events: the company; nport, npx: fund ticker (VTSAX, IVV, SPY) "
+                          "or SEC series id (S000002848)",
             intervals=("1d",),
             credentials=(CredentialField(("user_agent",), "EDGAR_USER_AGENT"),),
             params={
                 "dataset": Param('"insider" (default, Form 4 trades), "financials", "earnings" (8-K item 2.02 filings), '
-                                 '"ftd" (fails-to-deliver), "13f" (institutional holdings) or "nport" (fund holdings)',
-                                 ("insider", "financials", "earnings", "ftd", "13f", "nport")),
+                                 '"events" (all 8-Ks), "ftd" (fails-to-deliver), "13dg" (5%+ stakes), "144" (planned insider sales), '
+                                 '"13f" (institutional holdings), "nport" (fund holdings) or "npx" (fund proxy votes)',
+                                 ("insider", "financials", "earnings", "events", "ftd", "13dg", "144", "13f", "nport", "npx")),
                 "concepts": Param("financials only: XBRL concepts, e.g. Revenues; default is a standard set", is_list=True),
                 "period": Param('financials only: "quarter" (default) or "annual"', ("quarter", "annual")),
                 "top": Param("nport only: keep the largest N positions of each filing (default all)", is_int=True),
+                "items": Param('events only: 8-K item numbers to keep, e.g. 5.02 (executive changes), 1.03 (bankruptcy)', is_list=True),
+                "issuer": Param("npx only: company whose votes to return (CUSIP, ISIN or part of its name); "
+                                "without it each filing is summarised"),
             },
             fields="insider: owner, officer_title, buy_shares, buy_value, sell_shares, sell_value, other_shares_net, plan_10b5_1, "
                    "shares_owned_after, ... (one row per filing, stamped when it became public). financials: one row per filing with each concept's value and period. "
                    "earnings: event_date, items, url (one row per earnings 8-K, stamped at SEC acceptance). ftd: fails, price, cusip, symbol. "
                    "13f: report_period, n_positions, total_value, holdings (list of issuer, cusip, value, shares, put_call). "
                    "nport: fund, report_period, total_assets, net_assets, flow_sales, flow_redemptions, flow_reinvestment, returns_pct, "
-                   "n_holdings, holdings (largest first: name, cusip, isin, ticker, balance, value_usd, pct_net_assets, asset_cat, country)",
+                   "n_holdings, holdings (largest first: name, cusip, isin, ticker, balance, value_usd, pct_net_assets, asset_cat, country). "
+                   "events: items, item_names, event_date, url. 144: seller, relationship, shares, market_value, approx_sale_date, "
+                   "acquired_how, plan_10b5_1_adopted. 13dg: filer, activist (1 = 13D), percent_of_class, shares, purpose, parsed_from. "
+                   "npx: with issuer, votes (meeting_date, proposal, proposed_by, how_voted, management_recommendation, against_management); "
+                   "without, pct_for, pct_against_management, pct_shareholder_proposals_supported",
             notes='EDGAR_USER_AGENT is a name and contact email, e.g. "Your Company contact@yourcompany.com" (SEC rule; no registration). '
                   "ftd is published twice a month about two weeks after each half-month and stamped at the settlement date; "
                   "13f is filed up to 45 days after the quarter end (request a year or less for large managers). "
                   "nport: only each fiscal quarter's last month is public, about 60 days later, from late 2019; "
-                  "use top (e.g. 50) for funds with thousands of positions.",
+                  "use top (e.g. 50) for funds with thousands of positions. 13dg before Dec 2024 is parsed from free text "
+                  "(shares best effort); 144 from 2023; npx from Aug 2024 filings, request two years or less.",
         ),
         Source(
             name="hmrc",
@@ -581,6 +590,80 @@ SOURCES: dict[str, Source] = {
             intervals=("1d",),
             fields="travelers",
             notes="Published the next morning (around 9:00 New York). Compare with the same weekday a year earlier.",
+        ),
+        Source(
+            name="netshort",
+            label="EU Net Short Positions",
+            asset_classes="Disclosed net short positions (0.5%+ of shares) in French (AMF), Dutch (AFM) and Spanish (CNMV) shares",
+            ticker_format="an ISIN (FR0000054470), part of the issuer's name (ubisoft), or all",
+            intervals=("1d",),
+            params={
+                "country": Param('list of "FR", "NL", "ES" (default all)', is_list=True),
+                "holder": Param("keep positions whose holder name contains this text, e.g. citadel"),
+            },
+            fields="holder, issuer, isin, net_short_pct, country, source; holder_lei, published_from, published_to for FR",
+            notes="One row per published position at the position date (published by the next trading day). History from 2010 (ES) "
+                  "and 2012 (FR, NL). Each row carries the regulator's required attribution in source.",
+        ),
+        Source(
+            name="wasde",
+            label="USDA WASDE",
+            asset_classes="USDA crop supply and demand projections (corn, soybeans, wheat, cotton, rice...), US and by country",
+            ticker_format="<commodity>:<attribute> for the US balance sheet (corn:ending_stocks, soybeans:avg_farm_price) or "
+                          "<commodity>:<attribute>:<region> for world tables (corn:ending_stocks:World, soybeans:production:Brazil). "
+                          "US: corn, feed_grains, sorghum, barley, oats, wheat, soybeans, soybean_oil, soybean_meal, rice, cotton, sugar; "
+                          "world: corn, coarse_grains, wheat, rice, soybeans, soybean_oil, soybean_meal, cotton",
+            intervals=("1m",),
+            fields="market_year, value (this report's projection), previous (last month's), prior_year, prior_year_value, report",
+            notes="One row per monthly report, stamped at release (12:00 New York), from July 2010. US units (million bushels, "
+                  "bu/acre, $/bu) for US tables, million metric tons for world tables.",
+        ),
+        Source(
+            name="warn",
+            label="WARN Layoff Notices",
+            asset_classes="US mass layoff and plant closure notices (WARN Act) from California and New Jersey",
+            ticker_format="part of a company name (blue shield) or all",
+            intervals=("1d",),
+            params={"state": Param('list of "CA", "NJ" (default both)', is_list=True)},
+            fields="company, state, employees, notice_type, effective_date, received_date, county, city, address, industry",
+            notes="Stamped at the notice date (NJ: first of the month posted). CA from July 2019 (gap July 2020 to June 2022), NJ from 2004.",
+        ),
+        Source(
+            name="degreedays",
+            label="NOAA Degree Days",
+            asset_classes="Daily US heating and cooling degree days (energy demand), population or gas weighted, from 1981",
+            ticker_format="hdd:<region> or cdd:<region>; region US, a census division (new_england ... pacific, or 1-9) or a state code (TX)",
+            intervals=("1d",),
+            params={"weights": Param('"population" (default); heating by division or US also "gas", "electricity", "fuel_oil"',
+                                     ("population", "gas", "electricity", "fuel_oil"))},
+            fields="value",
+            notes="Published the next morning by NOAA's Climate Prediction Center.",
+        ),
+        Source(
+            name="fedtext",
+            label="Federal Reserve Texts",
+            asset_classes="FOMC statements and minutes, and Fed Board speeches, as full text with release times",
+            ticker_format="statement, minutes or speeches",
+            intervals=("1d",),
+            params={"speaker": Param("speeches only: a speaker's last name, e.g. powell")},
+            fields="title, text, url, meeting (statements, minutes), speaker, event (speeches), source",
+            notes="Statements from 2006 at their release time, minutes from late 2007 at 14:00 New York on release day, "
+                  "speeches from 2006 at the date. Minutes are long: request a few years at a time and a small max_rows.",
+        ),
+        Source(
+            name="usaspending",
+            label="USAspending",
+            asset_classes="US federal contract and grant spending by company (monthly obligations, largest new awards)",
+            ticker_format="a recipient's name or part of it (palantir, lockheed martin) or its UEI",
+            intervals=("1m", "1d"),
+            params={
+                "dataset": Param('"monthly" (default, obligations per month) or "awards" (largest awards first obligated in the period)',
+                                 ("monthly", "awards")),
+                "award_type": Param('"contracts" (default) or "grants"', ("contracts", "grants")),
+                "min_amount": Param("awards only: minimum award size in US dollars", is_int=True),
+            },
+            fields="monthly: obligations. awards: amount, award_id, recipient, agency, sub_agency, description, start_date, end_date, url",
+            notes="From October 2007. Defense contracts appear with a 90-day delay.",
         ),
     ]
 }

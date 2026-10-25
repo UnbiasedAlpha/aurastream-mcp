@@ -82,10 +82,9 @@ def test_body_alpaca_and_fred_field_names(monkeypatch):
     assert alpaca["credentials"] == {"key": "ak", "secret": "as"}
     assert alpaca["feed"] == "iex"
     assert alpaca["dtype"] == "trades" and alpaca["assetclass"] == "crypto"
-    fred = build_body("fred", ["UK", "US"], "2020-01-01", "2025-01-01", "1m", indicator="cpi", as_of="date")
+    fred = build_body("fred", ["CPIAUCSL"], "2020-01-01", "2025-01-01", "1m", as_of="date")
     assert fred["credentials"] == {"key": "fk"}
-    # The country shortcut is the API's "bars" field.
-    assert fred["bars"] == "cpi" and "indicator" not in fred and fred["as_of"] == "date"
+    assert fred["as_of"] == "date" and "bars" not in fred
 
 
 def test_intervals_follow_api_case_convention():
@@ -132,6 +131,17 @@ def test_body_new_credentialed_sources(monkeypatch):
     assert build_body("edgar", ["GME"], "2025-01-01", "2025-02-01", dataset="ftd")["dataset"] == "ftd"
     nport = build_body("edgar", ["VTSAX"], "2025-01-01", "2026-01-01", dataset="nport", top=50)
     assert nport["dataset"] == "nport" and nport["top"] == 50
+    ev = build_body("edgar", ["TSLA"], "2025-01-01", "2026-01-01", dataset="events", items=["5.02"])
+    assert ev["items"] == ["5.02"]
+    npx = build_body("edgar", ["VTSAX"], "2025-01-01", "2026-01-01", dataset="npx", issuer="Tesla")
+    assert npx["issuer"] == "Tesla"
+    ns = build_body("netshort", ["ubisoft"], "2026-01-01", "2026-10-01", "1d", country=["FR"], holder="citadel")
+    assert ns["country"] == ["FR"] and ns["holder"] == "citadel" and "credentials" not in ns
+    assert build_body("degreedays", ["hdd:US"], "2026-01-01", "2026-03-01", "1d", weights="gas")["weights"] == "gas"
+    us = build_body("usaspending", ["palantir"], "2024-01-01", "2026-01-01", "1m", dataset="awards", min_amount=1000000)
+    assert us["dataset"] == "awards" and us["min_amount"] == 1000000
+    assert build_body("warn", ["all"], "2026-01-01", "2026-10-01", "1d", state=["CA"])["state"] == ["CA"]
+    assert build_body("fedtext", ["speeches"], "2026-01-01", "2026-10-01", "1d", speaker="powell")["speaker"] == "powell"
     assert build_body("econcalendar", ["bls"], "2025-01-01", "2025-12-31")["credentials"] == {"user_agent": "Acme ops@acme.test"}
 
 
@@ -166,7 +176,8 @@ def test_missing_credentials_names_env_vars():
         ({"source": "binance", "tickers": ["BTCUSDT"], "interval": "1m"}, "does not support interval"),
         ({"source": "binance", "tickers": ["BTCUSDT"], "dtype": "orderbook"}, "supports dtype"),
         ({"source": "binance", "tickers": ["BTCUSDT"], "indicator": "cpi"}, "does not apply"),
-        ({"source": "fred", "tickers": ["UK"], "indicator": "cpi", "as_of": "release"}, "as_of for 'fred' must be"),
+        ({"source": "fred", "tickers": ["CPIAUCSL"], "as_of": "release"}, "as_of for 'fred' must be"),
+        ({"source": "fred", "tickers": ["UK"], "indicator": "cpi"}, "does not apply"),
         ({"source": "firstrate", "tickers": ["CL"], "instrument": "spot"}, "instrument for 'firstrate' must be"),
         ({"source": "binance", "tickers": ["BTCUSDT"], "instrument": "stock"}, "instrument for 'binance' must be"),
         ({"dtype": "trades"}, "supports dtype"),
@@ -338,7 +349,7 @@ def test_list_sources_reports_configuration(monkeypatch):
     assert "NOT configured (set POLYGON_API_KEY)" in polygon
     assert "- hktrade (Hong Kong Trade)" in text
     edgar = text.split("- edgar")[1].split("\n- ")[0]
-    assert "param dataset:" in edgar and "13f" in edgar and "nport" in edgar and "param top:" in edgar
+    assert "param dataset:" in edgar and "13f" in edgar and "nport" in edgar and "param top:" in edgar and "param issuer:" in edgar
     assert "- finra" not in text
 
 
@@ -364,7 +375,7 @@ async def test_get_latest_returns_requested_bars():
 # --- sources added in 0.1.2 -------------------------------------------------
 
 def test_all_api_sources_are_exposed():
-    assert len(SOURCES) == 39
+    assert len(SOURCES) == 45
     for name in ("deribit", "kucoin", "dydx", "hyperliquid", "lyra", "sdmx", "openmeteo"):
         assert not SOURCES[name].needs_credentials
 
