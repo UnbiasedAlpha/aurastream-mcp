@@ -43,10 +43,15 @@ Interval = Literal[INTERVALS]  # type: ignore[valid-type]
 DType = Literal[DTYPES]  # type: ignore[valid-type]
 
 
-def resolve_api_key(headers: Mapping[str, str] | None, env: Mapping[str, str] | None = None) -> str | None:
-    """Pick the AuraStream key: client request header first (HTTP mode), then env.
+def resolve_api_key(
+    headers: Mapping[str, str] | None,
+    env: Mapping[str, str] | None = None,
+    query: Mapping[str, str] | None = None,
+) -> str | None:
+    """Pick the AuraStream key: what the client sent (HTTP mode) first, then env.
 
-    Headers checked: ``x-api-key`` and ``Authorization: Bearer <key>``.
+    Checked in order: the ``x-api-key`` header, ``Authorization: Bearer <key>``, and the
+    ``api_key`` URL parameter (for clients such as ChatGPT that cannot send custom headers).
     """
     env = os.environ if env is None else env
     lowered = {k.lower(): v for k, v in (headers or {}).items()}
@@ -56,6 +61,9 @@ def resolve_api_key(headers: Mapping[str, str] | None, env: Mapping[str, str] | 
     auth = lowered.get("authorization", "").strip()
     if auth.lower().startswith("bearer ") and auth[7:].strip():
         return auth[7:].strip()
+    key = (query or {}).get("api_key", "").strip()
+    if key:
+        return key
     if _require_client_key:
         return None
     return env.get("AURASTREAM_API_KEY") or None
@@ -70,6 +78,15 @@ def _headers(ctx: Context | None) -> Mapping[str, str] | None:
         return None
 
 
+def _query(ctx: Context | None) -> Mapping[str, str] | None:
+    if ctx is None:
+        return None
+    try:
+        return getattr(ctx.request_context.request, "query_params", None)
+    except ValueError:
+        return None
+
+
 def list_sources_text(env: Mapping[str, str] | None = None) -> str:
     env = os.environ if env is None else env
     lines = [
@@ -78,6 +95,12 @@ def list_sources_text(env: Mapping[str, str] | None = None) -> str:
         "environment, never passed as tool arguments.",
         "",
     ]
+    if _require_client_key:
+        lines[1:2] = [
+            "This is a shared hosted server: it holds no provider keys, so sources marked "
+            "'NOT configured' only work when the user runs aurastream-mcp locally with their own keys "
+            "(pip install aurastream-mcp).",
+        ]
     for s in SOURCES.values():
         if s.credentials_one_of:
             either = " or ".join(c.env for c in s.credentials)
@@ -191,7 +214,7 @@ async def get_timeseries(
     try:
         return await run_timeseries(
             source=source, tickers=tickers, start=start, end=end, interval=interval, dtype=dtype,
-            max_rows=max_rows, api_key=resolve_api_key(_headers(ctx)),
+            max_rows=max_rows, api_key=resolve_api_key(_headers(ctx), query=_query(ctx)),
             price_type=price_type, instrument=instrument, continuous_contracts=continuous_contracts,
             ticktype=ticktype, assetclass=assetclass,
             category=category, feed=feed, adjustment=adjustment, indicator=indicator, dataset=dataset,
@@ -242,7 +265,7 @@ async def get_latest(
     try:
         return await run_timeseries(
             source=source, tickers=tickers, start=start, end=end, interval=interval,
-            max_rows=bars, api_key=resolve_api_key(_headers(ctx)),
+            max_rows=bars, api_key=resolve_api_key(_headers(ctx), query=_query(ctx)),
         )
     except AuraStreamError as exc:
         raise ToolError(str(exc)) from None
@@ -260,7 +283,12 @@ def main(argv: list[str] | None = None) -> None:
     )
     parser.add_argument(
         "--require-client-key", action="store_true",
-        help="HTTP mode: only use the key sent by the client (x-api-key or Authorization: Bearer); ignore AURASTREAM_API_KEY.",
+        help="HTTP mode: only use the key sent by the client (x-api-key, Authorization: Bearer or ?api_key=); "
+        "ignore AURASTREAM_API_KEY. Use this for a shared server.",
+    )
+    parser.add_argument(
+        "--json-response", action="store_true",
+        help="HTTP mode: answer with plain JSON instead of an SSE stream (simpler behind a proxy).",
     )
     args = parser.parse_args(argv)
 
@@ -285,6 +313,7 @@ def main(argv: list[str] | None = None) -> None:
         port=args.port,
         streamable_http_path=args.path,
         stateless_http=True,
+        json_response=args.json_response,
         transport_security=security,
     )
 

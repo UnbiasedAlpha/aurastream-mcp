@@ -199,7 +199,8 @@ async def fetch(body: dict[str, Any], api_key: str | None) -> dict[str, Any]:
     if not api_key:
         raise AuraStreamError(
             "No AuraStream API key. Set AURASTREAM_API_KEY in the MCP server's environment, or in HTTP mode "
-            f"send it as an x-api-key or 'Authorization: Bearer' header. Free keys: {DASHBOARD_URL}."
+            "send it as an x-api-key or 'Authorization: Bearer' header, or add ?api_key=<key> to the server URL. "
+            f"Free keys: {DASHBOARD_URL}."
         )
     try:
         async with httpx.AsyncClient(timeout=TIMEOUT_SECONDS) as http:

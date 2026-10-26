@@ -103,9 +103,26 @@ claude mcp add aurastream -e AURASTREAM_API_KEY=your-aurastream-key -- aurastrea
 
 Add `-e FRED_API_KEY=...` etc. for credentialed sources, and `--scope user` to make it available in every project.
 
+### Hosted server (no install)
+
+Unbiased Alpha runs a shared copy at `https://aurastream.unbiased-alpha.com/mcp`. Point any client that supports remote MCP servers at it and send your own AuraStream key:
+
+- as a header: `x-api-key: <key>` or `Authorization: Bearer <key>`, or
+- in the URL, for clients that cannot set headers (ChatGPT): `https://aurastream.unbiased-alpha.com/mcp?api_key=<key>`. Anyone who sees that URL can use your key, so treat it like the key itself.
+
+Claude Code:
+
+```bash
+claude mcp add --transport http aurastream https://aurastream.unbiased-alpha.com/mcp --header "x-api-key: your-key"
+```
+
+The hosted server holds no provider keys, so sources that need your own provider account (FRED, Polygon, Nemeton and the others in the table above) only work with a local install. Every source that needs no provider key works.
+
 ### ChatGPT (remote connector)
 
-ChatGPT only talks to remote MCP servers over HTTPS, so run the server in HTTP mode somewhere reachable and register the URL as a connector (Settings > Connectors, developer mode).
+The quickest route is the hosted server above: add `https://aurastream.unbiased-alpha.com/mcp?api_key=<your key>` as a connector (Settings > Connectors, developer mode). To run your own instead:
+
+ChatGPT only talks to remote MCP servers over HTTPS, so run the server in HTTP mode somewhere reachable and register the URL as a connector.
 
 ```bash
 AURASTREAM_API_KEY=your-key aurastream-mcp --http --host 127.0.0.1 --port 8000
@@ -120,13 +137,13 @@ aurastream-mcp --http --port 8000 --allowed-host mcp.example.com
 
 and add `https://mcp.example.com/mcp` in ChatGPT. Requests with any other `Host` header are rejected (DNS-rebinding protection).
 
-**How the API key works in HTTP mode.** If the client sends `x-api-key: <key>` or `Authorization: Bearer <key>`, that key is used. Otherwise the server falls back to `AURASTREAM_API_KEY`. The fallback is what makes ChatGPT work today, but it also means **anyone who knows the URL spends your allowance and uses your provider credentials**. Treat the HTTP mode as single-user self-hosting: keep the URL private, or put it behind your own auth. For clients that can send headers, start with `--require-client-key` to disable the fallback. Provider credentials always come from the server's environment.
+**How the API key works in HTTP mode.** If the client sends `x-api-key: <key>`, `Authorization: Bearer <key>` or `?api_key=<key>` in the URL, that key is used. Otherwise the server falls back to `AURASTREAM_API_KEY`. The fallback is what makes ChatGPT work today, but it also means **anyone who knows the URL spends your allowance and uses your provider credentials**. Treat the HTTP mode as single-user self-hosting: keep the URL private, or put it behind your own auth. Start with `--require-client-key` to disable the fallback when each user brings their own key. Provider credentials always come from the server's environment.
 
 ### Other options
 
 ```
 aurastream-mcp [--http] [--host HOST] [--port PORT] [--path /mcp]
-               [--allowed-host HOST ...] [--require-client-key]
+               [--allowed-host HOST ...] [--require-client-key] [--json-response]
 ```
 
 `AURASTREAM_API_URL` overrides the endpoint (useful for testing).

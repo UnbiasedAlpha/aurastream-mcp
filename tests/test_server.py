@@ -339,6 +339,21 @@ def test_resolve_api_key_prefers_headers(monkeypatch):
     assert resolve_api_key({"authorization": "Bearer tok"}, env) == "tok"
 
 
+def test_resolve_api_key_from_url_parameter(monkeypatch):
+    env = {"AURASTREAM_API_KEY": "env-key"}
+    assert resolve_api_key({"host": "x"}, env, {"api_key": "q"}) == "q"
+    assert resolve_api_key({"x-api-key": "hdr"}, env, {"api_key": "q"}) == "hdr"
+    monkeypatch.setattr(server, "_require_client_key", True)
+    assert resolve_api_key(None, env, {"api_key": "q"}) == "q"
+    assert resolve_api_key(None, env, {"api_key": " "}) is None
+
+
+def test_list_sources_text_hosted_note(monkeypatch):
+    assert "shared hosted server" not in list_sources_text({})
+    monkeypatch.setattr(server, "_require_client_key", True)
+    assert "shared hosted server" in list_sources_text({})
+
+
 def test_list_sources_reports_configuration(monkeypatch):
     monkeypatch.setenv("FRED_API_KEY", "x")
     text = list_sources_text()
