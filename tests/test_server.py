@@ -390,7 +390,7 @@ async def test_get_latest_returns_requested_bars():
 # --- sources added in 0.1.2 -------------------------------------------------
 
 def test_all_api_sources_are_exposed():
-    assert len(SOURCES) == 45
+    assert len(SOURCES) == 46
     for name in ("deribit", "kucoin", "dydx", "hyperliquid", "lyra", "sdmx", "openmeteo"):
         assert not SOURCES[name].needs_credentials
 
@@ -464,3 +464,13 @@ async def test_get_timeseries_weather_matches_location_keys():
     assert sent["tickerlist"] == [{"latitude": 48.85, "longitude": 2.35}] and sent["timezone"] == "Europe/Paris"
     out = text_of(result)
     assert "timestamp,temperature_2m" in out and "Not in response" not in out
+
+
+def test_body_signals(monkeypatch):
+    with pytest.raises(AuraStreamError, match="NEMETON_API_KEY"):
+        build_body("signals", ["BTCUSDT"], "2026-01-01", "2026-02-01", "1h")
+    monkeypatch.setenv("NEMETON_API_KEY", "nem")
+    body = build_body("signals", ["statement"], "2020-01-01", "2026-01-01", "1d", dataset="fed_tone")
+    assert body["credentials"] == {"key": "nem"} and body["dataset"] == "fed_tone" and body["source"] == "signals"
+    with pytest.raises(AuraStreamError, match="must be one of"):
+        build_body("signals", ["AAPL"], "2020-01-01", "2026-01-01", "1d", dataset="layoffs")
