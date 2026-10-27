@@ -473,4 +473,5 @@ def test_body_signals(monkeypatch):
     body = build_body("signals", ["statement"], "2020-01-01", "2026-01-01", "1d", dataset="fed_tone")
     assert body["credentials"] == {"key": "nem"} and body["dataset"] == "fed_tone" and body["source"] == "signals"
     with pytest.raises(AuraStreamError, match="must be one of"):
-        build_body("signals", ["AAPL"], "2020-01-01", "2026-01-01", "1d", dataset="layoffs")
+        build_body("signals", ["AAPL"], "2020-01-01", "2026-01-01", "1d", dataset="exposure_maps")
+    assert build_body("signals", ["LMT"], "2020-01-01", "2026-01-01", "1d", dataset="gov_contracts")["dataset"] == "gov_contracts"

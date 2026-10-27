@@ -669,25 +669,32 @@ SOURCES: dict[str, Source] = {
             name="signals",
             label="Nemeton Signals",
             asset_classes="Unbiased Alpha's derived datasets: crypto leverage and crowding, Fed tone, 8-K risk flags, "
-                          "insider conviction, gas storage and crop surprises",
+                          "insider conviction, mutual fund flow pressure, federal contracts and layoffs per company, "
+                          "gas storage and crop surprises",
             ticker_format="crypto_leverage: a perpetual, e.g. BTCUSDT. fed_tone: statement, minutes, speeches or index. "
-                          "event_flags, insider_conviction: a US stock ticker (AAPL). energy_ag: gas_storage, corn, soybeans or wheat",
+                          "event_flags, insider_conviction, fund_flow_pressure, gov_contracts, layoffs: a US stock ticker (AAPL). energy_ag: gas_storage, corn, soybeans or wheat",
             intervals=("1h", "4h", "1d"),
             credentials=(CredentialField(("key",), "NEMETON_API_KEY"),),
             params={
-                "dataset": Param('"crypto_leverage" (default), "fed_tone", "event_flags", "insider_conviction" or "energy_ag"',
-                                 ("crypto_leverage", "fed_tone", "event_flags", "insider_conviction", "energy_ag")),
+                "dataset": Param('"crypto_leverage" (default), "fed_tone", "event_flags", "insider_conviction", '
+                                 '"fund_flow_pressure", "gov_contracts", "layoffs" or "energy_ag"',
+                                 ("crypto_leverage", "fed_tone", "event_flags", "insider_conviction", "fund_flow_pressure",
+                                  "gov_contracts", "layoffs", "energy_ag")),
             },
             fields="crypto_leverage: funding_annualized, hl_funding_annualized, basis_bps, oi_value, oi_change_24h, ls_account, "
                    "z_* scores, crowding_carry, crowding_positioning, crowding (positive = crowded long). "
                    "fed_tone: score (-1 dovish to +1 hawkish), hawkish, dovish, net_per_1000; statements also delta_score. "
                    "event_flags: items, flags, severe, severe_events_90d. "
                    "insider_conviction: owner, classification (routine/opportunistic), buy_value, sell_value, opp_buyers_30d, buy_conviction. "
+                   "fund_flow_pressure: flow_pressure, pressure_usd, fire_sale_share, n_funds. "
+                   "gov_contracts: obligations, ttm_obligations, yoy_growth, momentum_3m, recipients. "
+                   "layoffs: company, employees, state, notice_type, effective_date. "
                    "energy_ag: gas change, expected_change, surprise_z; crops ending_stocks, stocks_to_use, revision_z",
             notes="Needs a Nemeton subscription (NEMETON_API_KEY). Every value is stamped when it became available. "
                   "crypto_leverage is hourly (intervals keep the last hour); the other datasets are one row per document, "
                   "filing, trade or release whatever the interval. A stock with no record returns an empty series. "
-                  "History: crypto 2020, fed_tone 2006, event_flags 2004, insider_conviction 2006, energy_ag 2010.",
+                  "History: crypto 2020, fed_tone 2006, event_flags 2004, insider_conviction 2006, fund_flow_pressure 2019 "
+                  "(monthly, stamped 61 days after the month), gov_contracts 2007 (100 days after), layoffs 2004, energy_ag 2010.",
         ),
     ]
 }

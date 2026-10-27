@@ -22,7 +22,7 @@ from .sources import DTYPES, INTERVALS, SOURCES, intervals_for
 INSTRUCTIONS = """\
 AuraStream is a historical data API behind one endpoint: market data (crypto exchanges and DEXs,
 equities, FX, futures, CFDs), crypto order book signals (Nemeton) and Unbiased Alpha's derived datasets
-(signals: crypto crowding, Fed tone, 8-K flags, insider conviction, energy surprises; Nemeton key), macro and energy (FRED, EIA, US Treasury,
+(signals: crypto crowding, Fed tone, 8-K flags, insider conviction, fund flows, contracts, layoffs, energy surprises; Nemeton key), macro and energy (FRED, EIA, US Treasury,
 World Bank, SDMX central bank series, Trading Economics, Nasdaq Data Link), positioning and flows (CFTC,
 SEC insider trades and planned sales, 8-K events, fails-to-deliver, 13D/13G stakes, 13F and fund holdings and votes, EU short positions, USDA WASDE, WARN layoffs, degree days, Fed texts, federal contracts, UK/EU/US/Hong Kong trade), crypto fundamentals and news
 (DefiLlama, CoinGecko, GDELT) and historical weather (Open-Meteo, Visual Crossing).
@@ -184,7 +184,7 @@ async def get_timeseries(
     sessiontemplate: Annotated[str | None, Field(description="tradestation only: trading session, e.g. Default or USEQPreAndPost.")] = None,
     closed_only: Annotated[bool | None, Field(description="tradestation only: leave out the bar still forming (default true).")] = None,
     bartype: Annotated[Literal["bar", "tick"] | None, Field(description="cityindex only: bar (default) or tick.")] = None,
-    dataset: Annotated[str | None, Field(description="edgar: insider (default), financials, earnings, events, ftd, 13dg, 144, 13f, nport or npx. usaspending: monthly (default) or awards. signals: crypto_leverage (default), fed_tone, event_flags, insider_conviction or energy_ag. uscensus: trade (default) or retail. gdelt: themes.")] = None,
+    dataset: Annotated[str | None, Field(description="edgar: insider (default), financials, earnings, events, ftd, 13dg, 144, 13f, nport or npx. usaspending: monthly (default) or awards. signals: crypto_leverage (default), fed_tone, event_flags, insider_conviction, fund_flow_pressure, gov_contracts, layoffs or energy_ag. uscensus: trade (default) or retail. gdelt: themes.")] = None,
     report: Annotated[Literal["disaggregated", "tff", "legacy"] | None, Field(description="cftc only; default depends on the symbol.")] = None,
     options: Annotated[bool | None, Field(description="cftc only: include options (futures-equivalent).")] = None,
     as_of: Annotated[Literal["release", "report", "realtime_start", "date"] | None, Field(description="cftc: release (default, stamped at Friday publication, no look-ahead) or report (Tuesday position date). fred: realtime_start (default, stamped at publication) or date (period described).")] = None,
