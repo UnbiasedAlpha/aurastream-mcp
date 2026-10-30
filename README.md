@@ -174,6 +174,12 @@ aurastream-mcp [--http] [--host HOST] [--port PORT] [--path /mcp]
 - Several sources are stamped at the period they describe but published later (EIA, EDGAR fails-to-deliver, the trade sources). `list_sources` notes the lag; shift the data before backtesting.
 - GDELT search queries are throttled by GDELT itself; keep ranges short. `dataset="themes"` is not throttled.
 
+## Directories
+
+Also listed on mcprush, with its security scan:
+
+[![AuraStream MCP server](https://mcprush.com/badge/aurastream-mcp/card.svg)](https://mcprush.com/to/aurastream-mcp?ref=badge)
+
 ## Development
 
 ```bash
