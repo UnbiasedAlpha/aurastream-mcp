@@ -2,8 +2,6 @@
 
 <!-- mcp-name: io.github.UnbiasedAlpha/aurastream-mcp -->
 
-[![mcprush](https://img.shields.io/endpoint?url=https%3A%2F%2Fmcprush.com%2Fbadge%2Faurastream-mcp%2Fshields.json)](https://mcprush.com/to/aurastream-mcp?ref=badge)
-
 An [MCP](https://modelcontextprotocol.io) server for [AuraStream](https://aurastream.unbiased-alpha.com), the unified historical data API. It lets Claude Desktop, Claude Code, ChatGPT and other MCP clients pull OHLCV bars (and, for some sources, funding rates, trades, quotes, order books and earnings) from crypto exchanges, Yahoo Finance, Oanda, Alpaca, Polygon and others, plus macro, positioning and trade-flow data such as FRED, CFTC Commitments of Traders, SEC insider trades, earnings filings, planned insider sales, 8-K events, fails-to-deliver, 13D/13G stakes, 13F and mutual fund/ETF holdings and votes, the US economic release calendar, UK/EU/US/Hong Kong metals trade, TSA travel numbers, historical weather and degree days, US retail sales and consumer spending (PCE), USDA crop projections (WASDE), EU short positions, WARN layoff notices, federal contract spending and Fed statements, minutes and speeches, plus Unbiased Alpha's own derived datasets (crypto crowding, Fed tone, 8-K risk flags, insider conviction, fund flows, federal contracts and layoffs per company, energy and crop surprises): all 46 AuraStream sources through one tool.
 
 Ask "plot BTC daily closes for Q1 from Binance", "compare SPY and QQQ drawdowns this year" or "how have hedge funds positioned in gold futures since 2020?" and the model calls AuraStream for the data.
@@ -175,6 +173,12 @@ aurastream-mcp [--http] [--host HOST] [--port PORT] [--path /mcp]
 - Non-bar data (funding, order and position books, trades, quotes, earnings, Finnhub financials and the macro, positioning and trade sources) is rendered generically as a table.
 - Several sources are stamped at the period they describe but published later (EIA, EDGAR fails-to-deliver, the trade sources). `list_sources` notes the lag; shift the data before backtesting.
 - GDELT search queries are throttled by GDELT itself; keep ranges short. `dataset="themes"` is not throttled.
+
+## Directories
+
+Also listed on mcprush, with its security scan:
+
+[![AuraStream MCP server](https://mcprush.com/badge/aurastream-mcp/card.svg)](https://mcprush.com/to/aurastream-mcp?ref=badge)
 
 ## Development
 
