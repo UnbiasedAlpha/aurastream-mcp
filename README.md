@@ -6,6 +6,8 @@ An [MCP](https://modelcontextprotocol.io) server for [AuraStream](https://aurast
 
 Ask "plot BTC daily closes for Q1 from Binance", "compare SPY and QQQ drawdowns this year" or "how have hedge funds positioned in gold futures since 2020?" and the model calls AuraStream for the data.
 
+Step-by-step setup for Claude and ChatGPT, with example prompts: [Connect Claude or ChatGPT to market data with MCP](https://unbiased-alpha.com/connect-claude-chatgpt-market-data-mcp).
+
 ## Tools
 
 | Tool | What it does |
